@@ -16,17 +16,20 @@
     <!-- Visualizador de Audio -->
     <canvas id="visualizer" class="fixed inset-0 w-full h-full"></canvas>
     
+    <!-- Header -->
+    <header class="relative z-10 text-center py-6">
+        <h1 class="text-4xl font-bold text-green-500 mb-1">🎵 Nicofy</h1>
+        <p class="text-gray-400 text-xs">Tu música, tu reproductor</p>
+    </header>
+
     <!-- Contenido Principal -->
-    <div class="relative z-10 container mx-auto px-4 py-6 max-w-2xl">
-        
-        <!-- Header -->
-        <header class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-green-500 mb-2">🎵 Nicofy</h1>
-            <p class="text-gray-400 text-sm">Tu música, tu reproductor</p>
-        </header>
-        
-        <!-- Reproductor -->
-        <div class="bg-gray-800/80 backdrop-blur-lg rounded-2xl p-6 mb-6 shadow-2xl border border-gray-700">
+    <div class="relative z-10 container mx-auto px-4 pb-12 max-w-6xl">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            
+            <!-- Columna Izquierda: Reproductor (2/3) -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Reproductor -->
+                <div class="bg-gray-800/80 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-gray-700/50">
             
             <!-- Información de la canción -->
             <div class="text-center mb-6">
@@ -98,10 +101,13 @@
                 </button>
                 <input type="range" id="volumeBar" class="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-green-500" min="0" max="100" value="80">
             </div>
-        </div>
-        
-        <!-- Lista de reproducción -->
-        <div class="bg-gray-800/80 backdrop-blur-lg rounded-2xl p-4 shadow-2xl border border-gray-700">
+                </div>
+            </div>
+
+            <!-- Columna Derecha: Playlist (1/3) -->
+            <div class="lg:col-span-1 space-y-6">
+                <!-- Lista de reproducción -->
+                <div class="bg-gray-800/80 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-gray-700/50 h-full">
             <div class="flex items-center justify-between mb-3">
                 <h3 class="text-lg font-semibold flex items-center gap-2">
                     <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 24 24">
@@ -128,11 +134,41 @@
             </div>
         </div>
         
-        <!-- Footer -->
-        <footer class="text-center mt-8 text-gray-500 text-xs">
-            <p>Hecho con 💚 | Nicofy v1.0</p>
-        </footer>
+        </div>
     </div>
+
+    <!-- Modal Editar Metadatos -->
+    <div id="editModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div class="bg-gray-800 border border-gray-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+            <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                Editar Información
+            </h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs uppercase text-gray-400 font-bold mb-1">Título</label>
+                    <input type="text" id="editTitle" class="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-2 focus:outline-none focus:border-green-500 transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-gray-400 font-bold mb-1">Artista / DJ</label>
+                    <input type="text" id="editArtist" class="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-2 focus:outline-none focus:border-green-500 transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-gray-400 font-bold mb-1">URL de Portada (JPG/PNG)</label>
+                    <input type="text" id="editImage" placeholder="https://..." class="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-2 focus:outline-none focus:border-green-500 transition-colors">
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button id="cancelEdit" class="flex-1 py-3 rounded-xl bg-gray-700 hover:bg-gray-600 transition-colors font-bold text-sm">Cancelar</button>
+                    <button id="saveEdit" class="flex-1 py-3 rounded-xl bg-green-500 hover:bg-green-400 transition-colors font-bold text-sm text-black">Guardar Cambios</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center pb-8 text-gray-500 text-xs relative z-10">
+        <p>Hecho con 💚 | Nicofy v1.1 Premium</p>
+    </footer>
     
     <!-- Elemento de audio oculto -->
     <audio id="audioPlayer" preload="none"></audio>

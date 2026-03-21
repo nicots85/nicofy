@@ -28,16 +28,25 @@ const dropZone = document.getElementById('dropZone');
 const canvas = document.getElementById('visualizer');
 const ctx = canvas.getContext('2d');
 
+// Modal Edit
+const editModal = document.getElementById('editModal');
+const editTitle = document.getElementById('editTitle');
+const editArtist = document.getElementById('editArtist');
+const editImage = document.getElementById('editImage');
+const saveEdit = document.getElementById('saveEdit');
+const cancelEdit = document.getElementById('cancelEdit');
+
 // Estado del reproductor
 let playlist = [];
-let originalPlaylist = []; // Para recuperar orden si se quita shuffle
+let originalPlaylist = []; 
 let currentIndex = 0;
 let isPlaying = false;
 let isShuffle = false;
-let repeatMode = 0; // 0 = no, 1 = todo, 2 = una
+let repeatMode = 0; 
 let isMuted = false;
 let previousVolume = 0.8;
-let dominantColor = 'rgba(34, 197, 94, 0.8)'; // Default green
+let dominantColor = 'rgba(34, 197, 94, 0.8)'; 
+let editingIndex = null;
 
 let audioContext = null;
 let analyser = null;
@@ -52,6 +61,18 @@ function resizeCanvas() {
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
+// Cargar Overrides de LocalStorage
+function getOverrides() {
+    const data = localStorage.getItem('nicofy_overrides');
+    return data ? JSON.parse(data) : {};
+}
+
+function saveOverride(file, metadata) {
+    const overrides = getOverrides();
+    overrides[file] = metadata;
+    localStorage.setItem('nicofy_overrides', JSON.stringify(overrides));
+}
+
 // Extraer color dominante de imagen
 function getAverageColor(imgEl) {
     try {
@@ -62,7 +83,6 @@ function getAverageColor(imgEl) {
         cx.drawImage(imgEl, 0, 0, c.width, c.height);
         const data = cx.getImageData(0, 0, c.width, c.height).data;
         let r = 0, g = 0, b = 0, count = 0;
-        // Sample para mayor velocidad
         for (let i = 0; i < data.length; i += 40) {
             r += data[i]; g += data[i+1]; b += data[i+2];
             count++;
@@ -100,32 +120,26 @@ function drawVisualizer() {
 
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
-    
     analyser.getByteFrequencyData(dataArray);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const barWidth = (canvas.width / bufferLength) * 2.5;
     let barHeight, x = 0;
 
-    // Gradiente dinámico basado en dominante
-    let gradDominant = dominantColor.replace('rgb', 'rgba').replace(')', ', 0.8)');
+    let gradDominant = dominantColor.replace('rgb', 'rgba').replace(')', ', 0.6)');
     const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
     gradient.addColorStop(0, gradDominant);
-    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.4)'); // Mezclado con un tono azul por defecto
+    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.2)');
 
     for (let i = 0; i < bufferLength; i++) {
-        barHeight = (dataArray[i] / 255) * canvas.height * 0.6;
+        barHeight = (dataArray[i] / 255) * canvas.height * 0.4;
         const centerY = canvas.height / 2;
-        
         ctx.fillStyle = gradient;
         ctx.fillRect(x, centerY + 10, barWidth, barHeight);
-        
-        ctx.fillStyle = gradDominant.replace('0.8)', '0.3)');
+        ctx.fillStyle = gradDominant.replace('0.6)', '0.15)');
         ctx.fillRect(x, centerY - 10 - barHeight, barWidth, barHeight * 0.5);
-
         x += barWidth + 1;
     }
-
     animationId = requestAnimationFrame(drawVisualizer);
 }
 
@@ -134,12 +148,19 @@ async function loadPlaylist() {
     try {
         const response = await fetch('config.json');
         const data = await response.json();
-        playlist = data.songs || [];
-        // Map songs properly: use remote URL if provided, otherwise default to music/ folder
-        playlist = playlist.map(s => ({
-            ...s, 
-            src: (s.file && s.file.startsWith('http')) ? s.file : `music/${s.file}`
-        }));
+        const rawSongs = data.songs || [];
+        const overrides = getOverrides();
+
+        playlist = rawSongs.map(s => {
+            const override = overrides[s.file];
+            return {
+                ...s,
+                title: override?.title || s.title || s.file,
+                artist: override?.artist || s.artist || 'Artista desconocido',
+                image: override?.image || s.image || null,
+                src: (s.file && s.file.startsWith('http')) ? s.file : `music/${s.file}`
+            };
+        });
         originalPlaylist = [...playlist];
         renderPlaylist();
     } catch (error) {
@@ -156,29 +177,82 @@ function renderPlaylist() {
     }
 
     playlistEl.innerHTML = playlist.map((song, index) => {
-        let isActive = song === playlist[currentIndex];
+        let isActive = index === currentIndex;
         return `
-        <div class="playlist-item p-3 rounded-lg bg-gray-700/50 flex items-center gap-3 ${isActive ? 'active' : ''}" data-index="${index}">
-            <div class="w-10 h-10 rounded bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+        <div class="playlist-item p-3 rounded-2xl bg-gray-700/30 flex items-center gap-3 group ${isActive ? 'active ring-1 ring-green-500/50 bg-green-500/10' : ''}" data-index="${index}">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center flex-shrink-0 overflow-hidden relative shadow-inner cursor-pointer play-trigger">
                 ${song.image ? `<img src="${song.image}" class="w-full h-full object-cover">` : 
-                `<svg class="w-5 h-5 text-white/70" fill="currentColor" viewBox="0 0 24 24">
+                `<svg class="w-6 h-6 text-white/30" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
                 </svg>`}
+                ${isActive ? '<div class="absolute inset-0 bg-green-500/20 flex items-center justify-center"><div class="w-2 h-2 bg-green-500 rounded-full animate-ping"></div></div>' : ''}
             </div>
-            <div class="flex-1 min-w-0">
-                <p class="font-medium truncate ${isActive ? 'text-green-400' : 'text-gray-100'}">${song.title || song.file}</p>
-                <p class="text-xs text-gray-400 truncate">${song.artist || 'Artista desconocido'}</p>
+            <div class="flex-1 min-w-0 cursor-pointer play-trigger">
+                <p class="font-bold truncate text-sm ${isActive ? 'text-green-400' : 'text-gray-100'}">${song.title}</p>
+                <p class="text-[10px] uppercase tracking-wider text-gray-500 font-bold truncate">${song.artist}</p>
             </div>
-            ${isActive ? '<svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>' : ''}
+            <button class="edit-btn p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-gray-600 transition-all text-gray-400 hover:text-white" data-index="${index}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+            </button>
         </div>
     `;}).join('');
 
-    document.querySelectorAll('.playlist-item').forEach(item => {
-        item.addEventListener('click', () => {
-            playSong(parseInt(item.dataset.index));
+    // Event Listeners
+    document.querySelectorAll('.play-trigger').forEach(el => {
+        el.addEventListener('click', (e) => {
+            const parent = e.target.closest('.playlist-item');
+            playSong(parseInt(parent.dataset.index));
+        });
+    });
+
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openEditModal(parseInt(btn.dataset.index));
         });
     });
 }
+
+// Modal Logic
+function openEditModal(index) {
+    editingIndex = index;
+    const song = playlist[index];
+    editTitle.value = song.title;
+    editArtist.value = song.artist;
+    editImage.value = song.image || '';
+    editModal.classList.remove('hidden');
+}
+
+saveEdit.addEventListener('click', () => {
+    if (editingIndex === null) return;
+    const song = playlist[editingIndex];
+    const newMetadata = {
+        title: editTitle.value,
+        artist: editArtist.value,
+        image: editImage.value
+    };
+    
+    saveOverride(song.file, newMetadata);
+    
+    // Update local state
+    playlist[editingIndex] = { ...playlist[editingIndex], ...newMetadata };
+    
+    // If it's the current song, update player UI
+    if (editingIndex === currentIndex) {
+        songTitle.textContent = newMetadata.title;
+        artistName.textContent = newMetadata.artist;
+        if (newMetadata.image) {
+            albumImg.src = newMetadata.image;
+            albumImg.classList.remove('hidden');
+            defaultAlbumIcon.classList.add('hidden');
+        }
+    }
+    
+    renderPlaylist();
+    editModal.classList.add('hidden');
+});
+
+cancelEdit.addEventListener('click', () => editModal.classList.add('hidden'));
 
 // Reproducir canción
 function playSong(index) {
@@ -186,20 +260,16 @@ function playSong(index) {
     currentIndex = index;
     const song = playlist[index];
 
-    // UI
-    songTitle.textContent = song.title || song.file;
-    artistName.textContent = song.artist || 'Artista desconocido';
+    songTitle.textContent = song.title;
+    artistName.textContent = song.artist;
     progressBar.value = 0;
     currentTimeEl.textContent = '0:00';
     durationEl.textContent = '0:00';
 
-    // Imagen y Color dinámico
     if (song.image) {
         albumImg.src = song.image;
         albumImg.classList.remove('hidden');
         defaultAlbumIcon.classList.add('hidden');
-        
-        // Obtener color dominante una vez que cargue
         albumImg.onload = () => {
             const color = getAverageColor(albumImg);
             dominantColor = color;
@@ -209,40 +279,37 @@ function playSong(index) {
         albumImg.classList.add('hidden');
         defaultAlbumIcon.classList.remove('hidden');
         dominantColor = 'rgba(34, 197, 94, 0.8)';
-        mainBody.style.background = ''; // reset to class default
+        mainBody.style.background = ''; 
     }
 
-    // Update Media Session
     if ('mediaSession' in navigator) {
-        navigator.mediaSession.setActionHandler('play', playAudio);
-        navigator.mediaSession.setActionHandler('pause', pauseAudio);
-        navigator.mediaSession.setActionHandler('previoustrack', goPrev);
-        navigator.mediaSession.setActionHandler('nexttrack', goNext);
-
         navigator.mediaSession.metadata = new MediaMetadata({
-            title: song.title || song.file,
-            artist: song.artist || 'Artista desconocido',
+            title: song.title,
+            artist: song.artist,
             artwork: song.image ? [{ src: song.image }] : []
         });
     }
 
-    // Set source and preload it
+    // Audio Setup
+    audioPlayer.crossOrigin = "anonymous"; 
     audioPlayer.src = song.src;
-    audioPlayer.crossOrigin = "anonymous"; // CRITICAL for CORS & Visualizer to work
     audioPlayer.preload = 'auto'; 
     
-    playBtn.addEventListener('click', initAudioContext, { once: true });
+    // Resume context on play
+    if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume();
+    }
+
     playAudio();
     updatePlaylistUI();
 }
 
-// Audio controls
 function playAudio() {
+    initAudioContext();
     audioPlayer.play().then(() => {
         isPlaying = true;
         updatePlayButton();
         albumArt.classList.add('playing');
-        initAudioContext();
         drawVisualizer();
     }).catch(console.error);
 }
@@ -270,10 +337,9 @@ function updatePlayButton() {
 }
 
 function updatePlaylistUI() {
-    renderPlaylist(); // re-render for active state colors
+    renderPlaylist();
 }
 
-// Format Time
 const formatTime = seconds => {
     if (isNaN(seconds)) return '0:00';
     const mins = Math.floor(seconds / 60);
@@ -281,42 +347,30 @@ const formatTime = seconds => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
-// Next & Prev Logic
 function goNext() {
     if (playlist.length === 0) return;
-    if (repeatMode === 2) {
-        audioPlayer.currentTime = 0;
-        playAudio();
-        return;
-    }
+    if (repeatMode === 2) { audioPlayer.currentTime = 0; playAudio(); return; }
     let newIndex = currentIndex + 1;
     if (newIndex >= playlist.length) {
         if (repeatMode === 1) newIndex = 0;
-        else { pauseAudio(); return; } // End of playlist
+        else { pauseAudio(); return; }
     }
     playSong(newIndex);
 }
 
 function goPrev() {
     if (playlist.length === 0) return;
-    if (audioPlayer.currentTime > 3) { // Si van más de 3 seg de canción, reinicia
-        audioPlayer.currentTime = 0;
-        return;
-    }
+    if (audioPlayer.currentTime > 3) { audioPlayer.currentTime = 0; return; }
     let newIndex = currentIndex - 1;
     if (newIndex < 0) newIndex = playlist.length - 1;
     playSong(newIndex);
 }
 
-// Shuffle & Repeat
 function toggleShuffle() {
     isShuffle = !isShuffle;
     shuffleBtn.classList.toggle('text-green-500', isShuffle);
-    shuffleBtn.classList.toggle('text-gray-400', !isShuffle);
-    
     if (isShuffle) {
         const currentSong = playlist[currentIndex];
-        // Fisher-Yates shuffle
         let shuffled = [...playlist];
         for (let i = shuffled.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -334,22 +388,9 @@ function toggleShuffle() {
 
 function toggleRepeat() {
     repeatMode = (repeatMode + 1) % 3;
-    const svgPath = repeatBtn.querySelector('path');
-    if (repeatMode === 0) {
-        repeatBtn.classList.remove('text-green-500');
-        repeatBtn.classList.add('text-gray-400');
-        svgPath.setAttribute('d', 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z');
-    } else if (repeatMode === 1) { // Repeat All
-        repeatBtn.classList.add('text-green-500');
-        repeatBtn.classList.remove('text-gray-400');
-        svgPath.setAttribute('d', 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z');
-    } else { // Repeat One
-        repeatBtn.classList.add('text-green-500');
-        svgPath.setAttribute('d', 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z M13 15V9h-1l-2 1v1h1.5v4H13z'); // Add a '1' in the middle roughly
-    }
+    repeatBtn.classList.toggle('text-green-500', repeatMode > 0);
 }
 
-// Volume Mute
 function toggleMute() {
     isMuted = !isMuted;
     if (isMuted) {
@@ -359,14 +400,13 @@ function toggleMute() {
         volUpIcon.classList.add('hidden');
         volMuteIcon.classList.remove('hidden');
     } else {
-        audioPlayer.volume = previousVolume > 0 ? previousVolume : 0.8;
+        audioPlayer.volume = previousVolume || 0.8;
         volumeBar.value = audioPlayer.volume * 100;
         volUpIcon.classList.remove('hidden');
         volMuteIcon.classList.add('hidden');
     }
 }
 
-// Event Listeners - Botones
 playBtn.addEventListener('click', togglePlay);
 prevBtn.addEventListener('click', goPrev);
 nextBtn.addEventListener('click', goNext);
@@ -374,15 +414,12 @@ shuffleBtn.addEventListener('click', toggleShuffle);
 repeatBtn.addEventListener('click', toggleRepeat);
 muteBtn.addEventListener('click', toggleMute);
 
-// Progreso y Audio Events
 audioPlayer.addEventListener('timeupdate', () => {
     const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
     progressBar.value = progress || 0;
     currentTimeEl.textContent = formatTime(audioPlayer.currentTime);
 });
-audioPlayer.addEventListener('loadedmetadata', () => {
-    durationEl.textContent = formatTime(audioPlayer.duration);
-});
+audioPlayer.addEventListener('loadedmetadata', () => durationEl.textContent = formatTime(audioPlayer.duration));
 audioPlayer.addEventListener('ended', goNext);
 
 progressBar.addEventListener('input', () => {
@@ -392,114 +429,39 @@ progressBar.addEventListener('input', () => {
 volumeBar.addEventListener('input', () => {
     const vol = volumeBar.value / 100;
     audioPlayer.volume = vol;
-    if (vol > 0 && isMuted) {
-        isMuted = false;
-        volUpIcon.classList.remove('hidden');
-        volMuteIcon.classList.add('hidden');
-    } else if (vol === 0 && !isMuted) {
-        isMuted = true;
-        volUpIcon.classList.add('hidden');
-        volMuteIcon.classList.remove('hidden');
-    }
+    volUpIcon.classList.toggle('hidden', vol === 0);
+    volMuteIcon.classList.toggle('hidden', vol > 0);
 });
 
-// Drag & Drop Local Files
-['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
-    document.body.addEventListener(evt, e => e.preventDefault(), false);
-});
-
+// Drag & Drop
+document.body.addEventListener('dragover', e => e.preventDefault());
 document.body.addEventListener('dragenter', () => dropZone.classList.remove('hidden'));
-document.body.addEventListener('dragleave', (e) => {
-    if (e.relatedTarget === null) dropZone.classList.add('hidden');
-});
-document.body.addEventListener('drop', handleDrop);
-
-function handleDrop(e) {
+document.body.addEventListener('dragleave', e => { if (!e.relatedTarget) dropZone.classList.add('hidden'); });
+document.body.addEventListener('drop', e => {
+    e.preventDefault();
     dropZone.classList.add('hidden');
     const files = [...e.dataTransfer.files].filter(f => f.type.includes('audio'));
-    if (files.length === 0) return;
-
     files.forEach(file => {
-        // Fallback for ID3 reading errors
-        const fallbackAdd = (title, artist) => {
-            const song = {
-                file: file.name,
-                title: title || file.name.replace('.mp3', ''),
-                artist: artist || 'Archivo Local',
-                src: URL.createObjectURL(file), // Blob URL for local playing
-                image: null
-            };
-            addToPlaylist(song);
+        const song = {
+            file: file.name,
+            title: file.name.replace(/\.[^/.]+$/, ""),
+            artist: 'Archivo Local',
+            src: URL.createObjectURL(file),
+            image: null
         };
-
-        if (window.jsmediatags) {
-            window.jsmediatags.read(file, {
-                onSuccess: function(tag) {
-                    const tags = tag.tags;
-                    let imageBlobUrl = null;
-                    if (tags.picture) {
-                        let base64String = "";
-                        for (let i = 0; i < tags.picture.data.length; i++) {
-                            base64String += String.fromCharCode(tags.picture.data[i]);
-                        }
-                        const imageBase64 = btoa(base64String);
-                        imageBlobUrl = `data:${tags.picture.format};base64,${imageBase64}`;
-                    }
-                    const song = {
-                        file: file.name,
-                        title: tags.title || file.name.replace('.mp3', ''),
-                        artist: tags.artist || 'Archivo Local',
-                        src: URL.createObjectURL(file),
-                        image: imageBlobUrl
-                    };
-                    addToPlaylist(song);
-                },
-                onError: function(error) {
-                    fallbackAdd();
-                }
-            });
-        } else {
-            fallbackAdd();
-        }
+        playlist.push(song);
+        originalPlaylist.push(song);
+        renderPlaylist();
     });
-}
-
-function addToPlaylist(song) {
-    playlist.push(song);
-    originalPlaylist.push(song);
-    if(isShuffle) {
-        // Re-shuffle to maintain consistency
-        toggleShuffle(); 
-        toggleShuffle(); // dirty hack to re-shuffle preserving current song
-    }
-    renderPlaylist();
-    // Auto-play si era la primera y el reproductor estaba vacío
-    if (playlist.length === 1 || audioPlayer.src === "") {
-        playSong(playlist.length - 1);
-    }
-}
+});
 
 // Teclado
 document.addEventListener('keydown', e => {
-    if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
-        e.preventDefault();
-        togglePlay();
-    }
-    if (e.code === 'ArrowRight') {
-        audioPlayer.currentTime += 5;
-    }
-    if (e.code === 'ArrowLeft') {
-        audioPlayer.currentTime -= 5;
-    }
+    if (e.code === 'Space' && e.target.tagName !== 'INPUT') { e.preventDefault(); togglePlay(); }
+    if (e.code === 'ArrowRight') audioPlayer.currentTime += 5;
+    if (e.code === 'ArrowLeft') audioPlayer.currentTime -= 5;
 });
 
-// Wake Lock / Visibility
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && isPlaying) {
-        initAudioContext();
-    }
-});
-
-// Inicializar
+// Iniciar
 loadPlaylist();
 audioPlayer.volume = 0.8;
