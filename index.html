@@ -7,6 +7,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
     <link rel="stylesheet" href="styles.css">
+    <!-- Preload first song for faster start -->
+    <link rel="preload" as="audio" href="https://archive.org/download/nicofy/01%20REC-2025-06-04.mp3" crossorigin>
+    <link rel="prefetch" as="audio" href="https://archive.org/download/nicofy/01%20REC-2025-09-17.mp3" crossorigin>
     <meta name="theme-color" content="#1db954">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -137,12 +140,19 @@
                 <!-- Lista de reproducción -->
                 <div class="bg-gray-800/80 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-gray-700/50 h-full">
             <div class="flex items-center justify-between mb-3">
-                <h3 class="text-lg font-semibold flex items-center gap-2">
-                    <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-                    </svg>
-                    Tu Música
-                </h3>
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                        </svg>
+                        Tu Música
+                    </h3>
+                    <button id="refreshArchiveBtn" class="p-2 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors text-xs flex items-center justify-center" 
+        title="Buscar y sincronizar nuevos archivos desde tu colección archive.org" 
+        aria-label="Buscar y sincronizar nuevos archivos desde archive.org">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m0 0l3.889 3.889L12 8.5l3.889-3.889M16 11.5V6a2 2 0 00-2-2h-5.5a2 2 0 00-3.898.562l-.002.003M16 11.5a4 4 0 11-7.898 3.44l-.002.002M4 16l4.898-7.898M4 16v2.5a2 2 0 002 2H9.5l.002-.002"></path></svg>
+                    </button>
+                </div>
                 
                 <div class="text-xs text-gray-400 flex items-center gap-2 bg-gray-700/50 px-2 py-1 rounded-md">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
