@@ -213,12 +213,14 @@ async function loadPlaylist() {
             const { index, time } = JSON.parse(saved);
             if (index >= 0 && index < playlist.length) {
                 renderPlaylist();
+                hideSplashScreen();
                 // Play song without autoplaying immediately to respect browser policies
                 playSong(index, time, false);
                 return;
             }
         }
         renderPlaylist();
+        hideSplashScreen();
     } catch (error) {
         console.error('Error cargando playlist:', error);
         // Distinguish between different types of errors
@@ -229,6 +231,7 @@ async function loadPlaylist() {
         } else {
             playlistEl.innerHTML = `<p class="text-gray-500 text-center py-4">Error al cargar la lista de reproducción: ${error.message}</p>`;
         }
+        hideSplashScreen();
     }
 }
 
@@ -781,10 +784,7 @@ audioPlayer.addEventListener('waiting', () => {
 
 audioPlayer.addEventListener('playing', () => {
     // Listo para reproducir, esconder cargadores
-    if (splashScreen) {
-        splashScreen.classList.add('opacity-0');
-        setTimeout(() => splashScreen.classList.add('hidden'), 1000);
-    }
+    hideSplashScreen();
     if (songLoader) songLoader.classList.add('hidden');
     albumArt.classList.add('playing');
 });
@@ -989,6 +989,7 @@ function stopCasting() {
 // Dino follow cursor
 let dino = null;
 let splashScreen = null;
+let dinoMoveListener = null;
 function initDinoFollower() {
     dino = document.getElementById('dino');
     splashScreen = document.getElementById('splashScreen');
@@ -998,7 +999,10 @@ function initDinoFollower() {
         if (!splashScreen || splashScreen.classList.contains('hidden') || 
             splashScreen.classList.contains('opacity-0')) {
             // Remove listener when splash screen is hidden
-            document.removeEventListener('mousemove', moveDino);
+            if (dinoMoveListener) {
+                document.removeEventListener('mousemove', dinoMoveListener);
+                dinoMoveListener = null;
+            }
             return;
         }
         const x = e.clientX;
@@ -1007,7 +1011,25 @@ function initDinoFollower() {
         dino.style.left = (x - 20) + 'px'; // adjust offset as needed
         dino.style.top = (y - 20) + 'px';
     }
-    document.addEventListener('mousemove', moveDino);
+    dinoMoveListener = moveDino;
+    document.addEventListener('mousemove', dinoMoveListener);
+}
+
+// Stop dino follower and hide splash screen
+function hideSplashScreen() {
+    // Remove dino move listener
+    if (dinoMoveListener) {
+        document.removeEventListener('mousemove', dinoMoveListener);
+        dinoMoveListener = null;
+    }
+    
+    // Hide splash screen
+    if (splashScreen) {
+        splashScreen.classList.add('opacity-0');
+        setTimeout(() => {
+            splashScreen.classList.add('hidden');
+        }, 300); // Match the transition duration in CSS
+    }
 }
 
 // Register service worker for caching
@@ -1025,3 +1047,8 @@ if (document.readyState === 'loading') {
 } else {
   initDinoFollower();
 }
+
+// Auto-hide splash screen after 15 seconds as a safety net
+setTimeout(() => {
+    hideSplashScreen();
+}, 15000);
