@@ -49,6 +49,12 @@ let previousVolume = 0.8;
 let dominantColor = 'rgb(34, 197, 94)'; 
 let editingIndex = null;
 
+// Descubrimiento de archive.org
+let archiveDiscoveryInterval = null;
+const ARCHIVE_COLLECTION = 'nicofy'; // Cambia esto por tu colección real
+const DISCOVERY_INTERVAL_MS = 30 * 60 * 1000; // 30 minutos
+let isDiscovering = false;
+
 let audioContext = null;
 let analyser = null;
 let source = null;
@@ -121,7 +127,7 @@ function initAudioContext() {
         gainNode.gain.value = isMuted ? 0 : document.getElementById('volumeBar').value / 100;
 
         // FIX: Solo enchufar el motor local avanzado. Si se enchufaba el dinámico por error, el navegador lo silenciaba
-        source = audioContext.createMediaElementSource(audioAdvanced);
+        source = audioContext.createMediaElementSource(audioPlayer);
         
         source.connect(bassNode);
         bassNode.connect(trebleNode);
@@ -412,6 +418,233 @@ const formatTime = seconds => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+// Descubrimiento de archivos en archive.org
+async function discoverArchiveFiles() {
+    if (isDiscovering) return;
+    
+    isDiscovering = true;
+    const refreshBtn = document.getElementById('refreshArchiveBtn');
+    if (refreshBtn) {
+        refreshBtn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m0 0l3.889 3.889L12 8.5l3.889-3.889M16 11.5V6a2 2 0 00-2-2h-5.5a2 2 0 00-3.898.562l-.002.003M16 11.5a4 4 0 11-7.898 3.44l-.002.002M4 16l4.898-7.898M4 16v2.5a2 2 0 002 2H9.5l.002-.002"></path></svg>';
+        refreshBtn.title = 'Buscando archivos...';
+        refreshBtn.disabled = true;
+    }
+
+    try {
+        // Usar la API de archive.org para buscar ítems en la colección
+        const response = await fetch(`https://archive.org/advancedsearch.php?q=collection:${ARCHIVE_COLLECTION}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&rows=100&page=1&output=json`);
+        
+        if (!response.ok) {
+            throw new Error(`Error de archive.org: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const items = data.response.docs || [];
+        
+        // Filtrar solo los que tienen identificador (evitar vacíos)
+        const validItems = items.filter(item => item.identifier);
+        
+        // Obtener overrides actuales para preservar metadatos editados
+        const overrides = getOverrides();
+        
+        // Convertir a formato de canción
+        const discoveredSongs = validItems.map(item => {
+            const identifier = item.identifier;
+            // Intentar obtener el primer archivo MP3 asociado
+            // En la práctica, necesitaríamos consultar los archivos de cada ítem,
+            // pero para simplificar asumimos que hay un MP3 con el mismo nombre
+            // En una implementación real, podríamos necesitar otra llamada a la API
+            const mp3Url = `https://archive.org/download/${ARCHIVE_COLLECTION}/${encodeURIComponent(identifier)}.mp3`;
+            
+            return {
+                file: mp3Url,
+                title: item.title || identifier,
+                artist: item.creator || 'Desconocido',
+                image: null, // Podríamos intentar obtener una portada si existe
+                src: mp3Url
+            };
+        });
+        
+        // Sincronización completa: eliminar archivos que ya no están en archive.org y añadir nuevos
+        // Primero, separar archivos locales (drag & drop) de los de archive.org
+        const localFiles = playlist.filter(song => !song.file.includes('archive.org/download/'));
+        
+        // Crear un mapa de los ítems actuales de archive.org por identificador
+        const archiveOrgMap = new Map();
+        for (const item of validItems) {
+            const identifier = item.identifier;
+            archiveOrgMap.set(identifier, {
+                title: item.title || identifier,
+                artist: item.creator || 'Desconocido'
+            });
+        }
+        
+        // Crear un mapa de nuestras canciones existentes de archive.org por identificador
+        const existingArchiveMap = new Map();
+        for (const song of playlist) {
+            if (song.file.includes('archive.org/download/')) {
+                // Extraer identificador de la URL: 
+                // https://archive.org/download/nicofy/01%20REC-2025-06-04.mp3?v=1
+                try {
+                    const urlObj = new URL(song.file);
+                    const pathname = urlObj.pathname; // /nicofy/01%20REC-2025-06-04.mp3
+                    const parts = pathname.split('/').filter(Boolean); // ["nicofy", "01%20REC-2025-06-04.mp3"]
+                    if (parts.length >= 2) {
+                        const filename = parts[1]; // "01%20REC-2025-06-04.mp3"
+                        // Quitar extensión .mp3 y decodificar
+                        const identifier = decodeURIComponent(filename.replace(/\.mp3$/i, ''));
+                        existingArchiveMap.set(identifier, song);
+                    }
+                } catch (e) {
+                    // Si falla la extracción, ignorar esta canción para sincronización
+                    // (probablemente sea un archivo local con formato inesperado)
+                }
+            }
+        }
+        
+        // Construir la nueva lista de canciones de archive.org
+        const newArchiveSongs = [];
+        for (const [identifier, archiveMeta] of archiveOrgMap) {
+            // Construir la URL estándar para este identificador
+            const fileURL = `https://archive.org/download/${ARCHIVE_COLLECTION}/${encodeURIComponent(identifier)}.mp3`;
+            
+            // Verificar si tenemos metadatos sobrescritos por el usuario
+            const overrides = getOverrides();
+            const overrideMeta = overrides[fileURL];
+            
+            let finalMeta;
+            if (overrideMeta) {
+                // Usar metadatos sobrescritos por el usuario (tienen prioridad máxima)
+                finalMeta = {
+                    title: overrideMeta.title,
+                    artist: overrideMeta.artist,
+                    image: overrideMeta.image || null
+                };
+            } else if (existingArchiveMap.has(identifier)) {
+                // La canción existía previamente, usar sus metadatos actuales (que podrían haber sido editados por el usuario)
+                const existingSong = existingArchiveMap.get(identifier);
+                finalMeta = {
+                    title: existingSong.title,
+                    artist: existingSong.artist,
+                    image: existingSong.image || null
+                };
+            } else {
+                // Nueva canción, usar metadatos de archive.org
+                finalMeta = {
+                    title: archiveMeta.title,
+                    artist: archiveMeta.artist,
+                    image: null // Por ahora no obtenemos portadas automáticamente
+                };
+            }
+            
+            // Añadir a la nueva lista
+            newArchiveSongs.push({
+                ...finalMeta,
+                file: fileURL,
+                src: fileURL
+            });
+        }
+        
+        // La nueva playlist es: archivos locales (en su orden original) + canciones de archive.org sincronizadas
+        playlist = [...localFiles, ...newArchiveSongs];
+        originalPlaylist = [...playlist]; // Actualizar copia original para modo shuffle
+        
+        // Actualizar UI
+        renderPlaylist();
+        
+        // Calcular cambios para notificación
+        const existingArchiveIdentifiers = new Set();
+        for (const song of playlist) {
+            if (song.file.includes('archive.org/download/')) {
+                try {
+                    const urlObj = new URL(song.file);
+                    const pathname = urlObj.pathname;
+                    const parts = pathname.split('/').filter(Boolean);
+                    if (parts.length >= 2) {
+                        const filename = parts[1];
+                        const identifier = decodeURIComponent(filename.replace(/\.mp3$/i, ''));
+                        existingArchiveIdentifiers.add(identifier);
+                    }
+                } catch (e) {}
+            }
+        }
+        
+        const archiveOrgIdentifiers = new Set(validItems.map(item => item.identifier));
+        const added = [...archiveOrgIdentifiers].filter(id => !existingArchiveIdentifiers.has(id));
+        const removed = [...existingArchiveIdentifiers].filter(id => !archiveOrgIdentifiers.has(id));
+        
+        // Notificar al usuario
+        if (added.length > 0 || removed.length > 0) {
+            let message = '';
+            if (added.length > 0) message += `Se añadieron ${added.length} nueva(s) canción(es). `;
+            if (removed.length > 0) message += `Se eliminaron ${removed.length} canción(es) que ya no están en archive.org.`;
+            showNotification(message.trim());
+        } else {
+            showNotification('La playlist está sincronizada con archive.org');
+        }
+        
+    } catch (error) {
+        console.error('Error descubriendo archivos en archive.org:', error);
+        showNotification('Error al buscar en archive.org: ' + error.message);
+    } finally {
+        isDiscovering = false;
+        const refreshBtn = document.getElementById('refreshArchiveBtn');
+        if (refreshBtn) {
+            refreshBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m0 0l3.889 3.889L12 8.5l3.889-3.889M16 11.5V6a2 2 0 00-2-2h-5.5a2 2 0 00-3.898.562l-.002.003M16 11.5a4 4 0 11-7.898 3.44l-.002.002M4 16l4.898-7.898M4 16v2.5a2 2 0 002 2H9.5l.002-.002"></path></svg>';
+            refreshBtn.title = 'Actualizar desde archive.org';
+            refreshBtn.disabled = false;
+        }
+    }
+}
+
+// Función para mostrar notificaciones temporales
+function showNotification(message) {
+    // Eliminar notificaciones existentes
+    const existing = document.getElementById('archive-notification');
+    if (existing) existing.remove();
+    
+    // Crear elemento de notificación
+    const notification = document.createElement('div');
+    notification.id = 'archive-notification';
+    notification.className = 'fixed bottom-4 right-4 bg-green-600/90 text-white px-4 py-2 rounded-xl shadow-lg z-50 transition-opacity duration-300';
+    notification.textContent = message;
+    
+    // Añadir al body
+    document.body.appendChild(notification);
+    
+    // Eliminar después de 3 segundos
+    setTimeout(() => {
+        notification.classList.add('opacity-0');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// Iniciar descubrimiento automático (opcional)
+function startAutoDiscovery() {
+    // Limpiar intervalo existente si hay uno
+    if (archiveDiscoveryInterval) {
+        clearInterval(archiveDiscoveryInterval);
+    }
+    
+    // Establecer nuevo intervalo
+    archiveDiscoveryInterval = setInterval(() => {
+        if (!isDiscovering) {
+            discoverArchiveFiles();
+        }
+    }, DISCOVERY_INTERVAL_MS);
+    
+    // Ejecutar inmediatamente al iniciar (opcional)
+    // discoverArchiveFiles();
+}
+
+// Detener descubrimiento automático
+function stopAutoDiscovery() {
+    if (archiveDiscoveryInterval) {
+        clearInterval(archiveDiscoveryInterval);
+        archiveDiscoveryInterval = null;
+    }
+}
+
 function goNext() {
     if (playlist.length === 0) return;
     if (repeatMode === 2) { audioPlayer.currentTime = 0; playAudio(); return; }
@@ -572,6 +805,23 @@ document.addEventListener('keydown', e => {
     if (e.code === 'ArrowLeft') audioPlayer.currentTime -= 5;
 });
 
+// Refresh button event listener
+const refreshArchiveBtn = document.getElementById('refreshArchiveBtn');
+if (refreshArchiveBtn) {
+    refreshArchiveBtn.addEventListener('click', discoverArchiveFiles);
+}
+
 // Iniciar
 loadPlaylist();
+// Opcional: iniciar descubrimiento automático cada 30 minutos
+// startAutoDiscovery();
 audioPlayer.volume = 0.8;
+
+// Register service worker for caching
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').then(reg => {
+    console.log('ServiceWorker registration successful with scope: ', reg.scope);
+  }).catch(err => {
+    console.log('ServiceWorker registration failed: ', err);
+  });
+}
