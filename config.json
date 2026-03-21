@@ -1,0 +1,29 @@
+{
+  "songs": [
+    {
+      "file": "https://archive.org/download/nicofy/01%20REC-2025-06-04.wav",
+      "title": "Set Live (04-06-25)",
+      "artist": "DJ Nico"
+    },
+    {
+      "file": "https://archive.org/download/nicofy/01%20REC-2025-09-17.wav",
+      "title": "Set Live (17-09-25)",
+      "artist": "DJ Nico"
+    },
+    {
+      "file": "https://archive.org/download/nicofy/01%20REC-2025-11-23.wav",
+      "title": "Set Live (23-11-25)",
+      "artist": "DJ Nico"
+    },
+    {
+      "file": "https://archive.org/download/nicofy/01%20REC-2026-02-28.wav",
+      "title": "Set Live (28-02-26)",
+      "artist": "DJ Nico"
+    },
+    {
+      "file": "https://archive.org/download/nicofy/01%20REC-2026-03-20.wav",
+      "title": "Set Live (20-03-26)",
+      "artist": "DJ Nico"
+    }
+  ]
+}
