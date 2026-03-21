@@ -51,6 +51,8 @@ let editingIndex = null;
 let audioContext = null;
 let analyser = null;
 let source = null;
+let bassNode = null;
+let trebleNode = null;
 let animationId = null;
 
 // Configurar canvas
@@ -102,8 +104,22 @@ function initAudioContext() {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 256;
+        
+        bassNode = audioContext.createBiquadFilter();
+        bassNode.type = "lowshelf";
+        bassNode.frequency.value = 200;
+        bassNode.gain.value = document.getElementById('bassEq').value;
+
+        trebleNode = audioContext.createBiquadFilter();
+        trebleNode.type = "highshelf";
+        trebleNode.frequency.value = 3000;
+        trebleNode.gain.value = document.getElementById('trebleEq').value;
+
         source = audioContext.createMediaElementSource(audioPlayer);
-        source.connect(analyser);
+        
+        source.connect(bassNode);
+        bassNode.connect(trebleNode);
+        trebleNode.connect(analyser);
         analyser.connect(audioContext.destination);
     }
     if (audioContext.state === 'suspended') {
@@ -162,6 +178,18 @@ async function loadPlaylist() {
             };
         });
         originalPlaylist = [...playlist];
+        
+        // Restore progress or just render
+        const saved = localStorage.getItem('nicofy_progress');
+        if (saved && playlist.length > 0) {
+            const { index, time } = JSON.parse(saved);
+            if (index >= 0 && index < playlist.length) {
+                renderPlaylist();
+                // Play song without autoplaying immediately to respect browser policies
+                playSong(index, time, false);
+                return;
+            }
+        }
         renderPlaylist();
     } catch (error) {
         console.error('Error cargando playlist:', error);
@@ -255,7 +283,7 @@ saveEdit.addEventListener('click', () => {
 cancelEdit.addEventListener('click', () => editModal.classList.add('hidden'));
 
 // Reproducir canción
-function playSong(index) {
+function playSong(index, startTime = 0, autoPlay = true) {
     if (index < 0 || index >= playlist.length) return;
     currentIndex = index;
     const song = playlist[index];
@@ -274,12 +302,14 @@ function playSong(index) {
             const color = getAverageColor(albumImg);
             dominantColor = color;
             mainBody.style.background = `linear-gradient(to bottom right, #111827, ${color.replace('rgb', 'rgba').replace(')', ', 0.15)')}, #111827)`;
+            albumArt.style.boxShadow = `0 0 50px ${color.replace('rgb', 'rgba').replace(')', ', 0.4)')}`;
         };
     } else {
         albumImg.classList.add('hidden');
         defaultAlbumIcon.classList.remove('hidden');
         dominantColor = 'rgb(34, 197, 94)';
         mainBody.style.background = ''; 
+        albumArt.style.boxShadow = `0 0 50px rgba(34, 197, 94, 0.4)`;
     }
 
     if ('mediaSession' in navigator) {
@@ -292,21 +322,26 @@ function playSong(index) {
 
     // Audio Setup
     audioPlayer.src = ''; // Limpiar buffer para Safari
-    if (song.src.startsWith('http')) {
-        audioPlayer.crossOrigin = "anonymous"; 
-    } else {
-        audioPlayer.removeAttribute('crossorigin');
-    }
+    // FIX SAFARI BUG: Siempre anonymous para no romper el MediaElementSourceNode de WebKit al cambiar de src
+    audioPlayer.crossOrigin = "anonymous"; 
     audioPlayer.src = song.src;
     audioPlayer.preload = 'auto'; 
     audioPlayer.load(); // Obligar a recargar reglas CORS 
     
+    // Asignar el tiempo de inicio guardado (set timeout para asegurar que el buffer esté listo en Safari)
+    if (startTime > 0) {
+        audioPlayer.addEventListener('loadedmetadata', function setTime() {
+            audioPlayer.currentTime = startTime;
+            audioPlayer.removeEventListener('loadedmetadata', setTime);
+        });
+    }
+
     // Resume context on play
-    if (audioContext && audioContext.state === 'suspended') {
+    if (autoPlay && audioContext && audioContext.state === 'suspended') {
         audioContext.resume();
     }
 
-    playAudio();
+    if (autoPlay) playAudio();
     updatePlaylistUI();
 }
 
@@ -418,6 +453,7 @@ function toggleMute() {
     }
 }
 
+// Event Listeners - Botones Principales
 playBtn.addEventListener('click', togglePlay);
 prevBtn.addEventListener('click', goPrev);
 nextBtn.addEventListener('click', goNext);
@@ -425,10 +461,42 @@ shuffleBtn.addEventListener('click', toggleShuffle);
 repeatBtn.addEventListener('click', toggleRepeat);
 muteBtn.addEventListener('click', toggleMute);
 
+// Ecualizador
+const bassEq = document.getElementById('bassEq');
+const trebleEq = document.getElementById('trebleEq');
+bassEq.addEventListener('input', () => {
+    if (bassNode) bassNode.gain.value = bassEq.value;
+});
+trebleEq.addEventListener('input', () => {
+    if (trebleNode) trebleNode.gain.value = trebleEq.value;
+});
+
+// Control de Velocidad
+const speedBtns = document.querySelectorAll('.speed-btn');
+speedBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        const speed = parseFloat(e.target.dataset.speed);
+        audioPlayer.playbackRate = speed;
+        speedBtns.forEach(b => {
+            b.className = 'speed-btn px-3 py-1 rounded-full text-xs font-bold bg-gray-700 text-gray-400 hover:text-white transition-colors border border-transparent';
+        });
+        e.target.className = 'speed-btn active px-3 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/50';
+    });
+});
+
+// Eventos de Progreso, Tiempo y Memoria
 audioPlayer.addEventListener('timeupdate', () => {
     const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
     progressBar.value = progress || 0;
     currentTimeEl.textContent = formatTime(audioPlayer.currentTime);
+    
+    // Guardar progreso cada ~5 segundos aprox
+    if (Math.floor(audioPlayer.currentTime) > 0 && Math.floor(audioPlayer.currentTime) % 5 === 0) {
+        localStorage.setItem('nicofy_progress', JSON.stringify({
+            index: currentIndex,
+            time: audioPlayer.currentTime
+        }));
+    }
 });
 audioPlayer.addEventListener('loadedmetadata', () => durationEl.textContent = formatTime(audioPlayer.duration));
 audioPlayer.addEventListener('ended', goNext);

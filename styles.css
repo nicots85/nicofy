@@ -1,23 +1,44 @@
 /* Estilos personalizados para Nicofy */
 
-/* Scrollbar personalizado */
+/* Scrollbar premium */
 ::-webkit-scrollbar {
-    width: 6px;
+    width: 4px;
 }
 
 ::-webkit-scrollbar-track {
-    background: rgba(55, 65, 81, 0.5);
-    border-radius: 10px;
+    background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: rgba(34, 197, 94, 0.5);
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(34, 197, 94, 0.7);
+    background: rgba(34, 197, 94, 0.4);
 }
+
+/* Modificadores globales */
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+/* Animación para la portada del álbum (Vinilo) */
+#albumArt {
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.8s ease;
+}
+
+#albumArt.playing {
+    animation: spinVinyl 15s linear infinite;
+}
+
+@keyframes spinVinyl {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Optimizar UI Range */
 
 /* Input range personalizado */
 input[type="range"] {
