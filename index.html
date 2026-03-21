@@ -33,11 +33,15 @@
             
             <!-- Información de la canción -->
             <div class="text-center mb-6">
-                <div id="albumArt" class="w-48 h-48 mx-auto mb-4 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center shadow-2xl bg-cover bg-center overflow-hidden transition-all duration-500 ring-4 ring-gray-800">
+                <div id="albumArt" class="relative w-48 h-48 mx-auto mb-4 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center shadow-2xl bg-cover bg-center overflow-hidden transition-all duration-500 ring-4 ring-gray-800">
                     <img id="albumImg" src="" alt="Album Art" class="w-full h-full object-cover hidden">
                     <svg id="defaultAlbumIcon" class="w-20 h-20 text-white/50" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
                     </svg>
+                    <!-- Cargador integrado al disco -->
+                    <div id="songLoader" class="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm z-20 hidden">
+                        <div class="w-12 h-12 border-4 border-green-500 border-t-transparent border-b-transparent rounded-full animate-[spin_1s_linear_infinite]"></div>
+                    </div>
                 </div>
                 <h2 id="songTitle" class="text-xl font-semibold mb-1">Selecciona una canción</h2>
                 <p id="artistName" class="text-gray-400 text-sm">--</p>
@@ -106,7 +110,7 @@
             <div class="mt-8 pt-6 border-t border-gray-700/50">
                 <div class="grid grid-cols-1 gap-6">
                     <!-- Ecualizador -->
-                    <div id="eqPanel" class="transition-opacity duration-300" title="Solo disponible para archivos procesados en RAM local">
+                    <div id="eqPanel" class="transition-opacity duration-300">
                         <h4 class="text-xs uppercase text-gray-400 font-bold mb-3 flex items-center gap-1">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
                             Ecualizador

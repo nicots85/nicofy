@@ -2,9 +2,7 @@
 // ============================================
 
 // Elementos del DOM
-const audioAdvanced = document.getElementById('audioPlayer'); // Motor 1: Conectado al EQ (Lento/Locales)
-const audioDirect = new Audio(); // Motor 2: Ultra Liviano (Streaming Nativo/Archive.org)
-let audioPlayer = audioAdvanced; // El motor activo actual
+const audioPlayer = document.getElementById('audioPlayer');
 
 const playBtn = document.getElementById('playBtn');
 const playIcon = document.getElementById('playIcon');
@@ -146,18 +144,7 @@ function drawVisualizer() {
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
     
-    if (audioPlayer === audioAdvanced) {
-        analyser.getByteFrequencyData(dataArray);
-    } else {
-        // Para el motor rápido remoto creamos un visualizador ambiental falso
-        if (isPlaying) {
-            for (let i = 0; i < bufferLength; i++) {
-                const noise = Math.random() * 60;
-                const wave = Math.sin(Date.now() / 200 + i * 0.1) * 40;
-                dataArray[i] = Math.max(0, (noise + wave + 50) * audioPlayer.volume);
-            }
-        }
-    }
+    analyser.getByteFrequencyData(dataArray);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -342,28 +329,23 @@ function playSong(index, startTime = 0, autoPlay = true) {
         });
     }
 
-    // Stop old engine
     audioPlayer.pause();
     
-    // Determinar qué motor usar: Remoto = Rápido (sin EQ), Local = Avanzado (con EQ)
-    const isRemote = song.src.startsWith('http');
-    audioPlayer = isRemote ? audioDirect : audioAdvanced;
-    
-    // Feedback visual del Ecualizador
+    // Reactivar panel ecualizador a los usuarios sin oscurecerlo
     const eqPanel = document.getElementById('eqPanel');
-    if (eqPanel) {
-        if (isRemote) eqPanel.classList.add('opacity-30', 'pointer-events-none');
-        else eqPanel.classList.remove('opacity-30', 'pointer-events-none');
-    }
+    if (eqPanel) eqPanel.classList.remove('opacity-30', 'pointer-events-none');
+    
+    // Mostrar visual de cargando mientras hacemos el buffering
+    const songLoader = document.getElementById('songLoader');
+    if (songLoader) songLoader.classList.remove('hidden');
+    albumArt.classList.remove('playing');
 
     // Audio Setup
     audioPlayer.src = '';
-    if (!isRemote) {
-        audioPlayer.crossOrigin = "anonymous"; 
-    }
+    audioPlayer.crossOrigin = "anonymous"; 
     audioPlayer.src = song.src;
-    audioPlayer.preload = 'metadata'; // Optimización de red
-    if (!isRemote) audioPlayer.load(); 
+    audioPlayer.preload = 'auto'; // Re-habilitar carga automática para que se llene el bufer cuanto antes
+    audioPlayer.load(); 
     
     // Asignar el tiempo de inicio guardado (set timeout para asegurar que el buffer esté listo en Safari)
     if (startTime > 0) {
@@ -479,8 +461,6 @@ function toggleMute() {
     if (isMuted) {
         previousVolume = volumeBar.value / 100;
         audioPlayer.volume = 0;
-        audioAdvanced.volume = 0;
-        audioDirect.volume = 0;
         if (gainNode) gainNode.gain.value = 0;
         volumeBar.value = 0;
         volUpIcon.classList.add('hidden');
@@ -488,8 +468,6 @@ function toggleMute() {
     } else {
         const vol = previousVolume || 0.8;
         audioPlayer.volume = vol;
-        audioAdvanced.volume = vol;
-        audioDirect.volume = vol;
         if (gainNode) gainNode.gain.value = vol;
         volumeBar.value = vol * 100;
         volUpIcon.classList.remove('hidden');
@@ -516,31 +494,41 @@ trebleEq.addEventListener('input', () => {
 });
 
 // Eventos de Progreso, Tiempo y Memoria
-[audioAdvanced, audioDirect].forEach(player => {
-    player.addEventListener('timeupdate', () => {
-        if (player !== audioPlayer) return; // Ignorar el motor inactivo
-        const progress = (player.currentTime / player.duration) * 100;
-        progressBar.value = progress || 0;
-        currentTimeEl.textContent = formatTime(player.currentTime);
-        
-        // Guardar progreso cada ~5 segundos aprox
-        if (Math.floor(player.currentTime) > 0 && Math.floor(player.currentTime) % 5 === 0) {
-            localStorage.setItem('nicofy_progress', JSON.stringify({
-                index: currentIndex,
-                time: player.currentTime
-            }));
-        }
-    });
+audioPlayer.addEventListener('timeupdate', () => {
+    const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+    progressBar.value = progress || 0;
+    currentTimeEl.textContent = formatTime(audioPlayer.currentTime);
     
-    player.addEventListener('loadedmetadata', () => {
-        if (player !== audioPlayer) return;
-        durationEl.textContent = formatTime(player.duration);
-    });
-    
-    player.addEventListener('ended', () => {
-        if (player !== audioPlayer) return;
-        goNext();
-    });
+    // Guardar progreso cada ~5 segundos aprox
+    if (Math.floor(audioPlayer.currentTime) > 0 && Math.floor(audioPlayer.currentTime) % 5 === 0) {
+        localStorage.setItem('nicofy_progress', JSON.stringify({
+            index: currentIndex,
+            time: audioPlayer.currentTime
+        }));
+    }
+});
+
+audioPlayer.addEventListener('loadedmetadata', () => durationEl.textContent = formatTime(audioPlayer.duration));
+audioPlayer.addEventListener('ended', goNext);
+
+// Pantallas de Carga y Buffer Inteligente
+const splashScreen = document.getElementById('splashScreen');
+const songLoader = document.getElementById('songLoader');
+
+audioPlayer.addEventListener('waiting', () => {
+    // Faltan datos, mostrar Cargando...
+    if (songLoader) songLoader.classList.remove('hidden');
+    albumArt.classList.remove('playing');
+});
+
+audioPlayer.addEventListener('playing', () => {
+    // Listo para reproducir, esconder cargadores
+    if (splashScreen) {
+        splashScreen.classList.add('opacity-0');
+        setTimeout(() => splashScreen.classList.add('hidden'), 1000);
+    }
+    if (songLoader) songLoader.classList.add('hidden');
+    albumArt.classList.add('playing');
 });
 
 progressBar.addEventListener('input', () => {
@@ -550,8 +538,6 @@ progressBar.addEventListener('input', () => {
 volumeBar.addEventListener('input', () => {
     const vol = volumeBar.value / 100;
     audioPlayer.volume = vol;
-    audioAdvanced.volume = vol;
-    audioDirect.volume = vol;
     if (gainNode) gainNode.gain.value = vol;
     volUpIcon.classList.toggle('hidden', vol === 0);
     volMuteIcon.classList.toggle('hidden', vol > 0);
