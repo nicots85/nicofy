@@ -291,6 +291,7 @@ function playSong(index) {
     }
 
     // Audio Setup
+    audioPlayer.src = ''; // Limpiar buffer para Safari
     if (song.src.startsWith('http')) {
         audioPlayer.crossOrigin = "anonymous"; 
     } else {
@@ -298,6 +299,7 @@ function playSong(index) {
     }
     audioPlayer.src = song.src;
     audioPlayer.preload = 'auto'; 
+    audioPlayer.load(); // Obligar a recargar reglas CORS 
     
     // Resume context on play
     if (audioContext && audioContext.state === 'suspended') {
@@ -316,7 +318,10 @@ function playAudio() {
         albumArt.classList.add('playing');
         if (animationId) cancelAnimationFrame(animationId);
         drawVisualizer();
-    }).catch(console.error);
+    }).catch(err => {
+        // Ignoramos AbortError porque ocurre naturalmente al cambiar rápido de canción
+        if (err.name !== 'AbortError') console.error('Play Error:', err);
+    });
 }
 
 function pauseAudio() {
