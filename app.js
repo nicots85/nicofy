@@ -53,6 +53,7 @@ let analyser = null;
 let source = null;
 let bassNode = null;
 let trebleNode = null;
+let gainNode = null;
 let animationId = null;
 
 // Configurar canvas
@@ -115,12 +116,16 @@ function initAudioContext() {
         trebleNode.frequency.value = 3000;
         trebleNode.gain.value = document.getElementById('trebleEq').value;
 
+        gainNode = audioContext.createGain();
+        gainNode.gain.value = isMuted ? 0 : document.getElementById('volumeBar').value / 100;
+
         source = audioContext.createMediaElementSource(audioPlayer);
         
         source.connect(bassNode);
         bassNode.connect(trebleNode);
         trebleNode.connect(analyser);
-        analyser.connect(audioContext.destination);
+        analyser.connect(gainNode);
+        gainNode.connect(audioContext.destination);
     }
     if (audioContext.state === 'suspended') {
         audioContext.resume();
@@ -325,7 +330,7 @@ function playSong(index, startTime = 0, autoPlay = true) {
     // FIX SAFARI BUG: Siempre anonymous para no romper el MediaElementSourceNode de WebKit al cambiar de src
     audioPlayer.crossOrigin = "anonymous"; 
     audioPlayer.src = song.src;
-    audioPlayer.preload = 'auto'; 
+    audioPlayer.preload = 'metadata'; // Optimización de red: no descargar todo de golpe
     audioPlayer.load(); // Obligar a recargar reglas CORS 
     
     // Asignar el tiempo de inicio guardado (set timeout para asegurar que el buffer esté listo en Safari)
@@ -440,14 +445,17 @@ function toggleRepeat() {
 function toggleMute() {
     isMuted = !isMuted;
     if (isMuted) {
-        previousVolume = audioPlayer.volume;
+        previousVolume = volumeBar.value / 100;
         audioPlayer.volume = 0;
+        if (gainNode) gainNode.gain.value = 0;
         volumeBar.value = 0;
         volUpIcon.classList.add('hidden');
         volMuteIcon.classList.remove('hidden');
     } else {
-        audioPlayer.volume = previousVolume || 0.8;
-        volumeBar.value = audioPlayer.volume * 100;
+        const vol = previousVolume || 0.8;
+        audioPlayer.volume = vol;
+        if (gainNode) gainNode.gain.value = vol;
+        volumeBar.value = vol * 100;
         volUpIcon.classList.remove('hidden');
         volMuteIcon.classList.add('hidden');
     }
@@ -508,6 +516,7 @@ progressBar.addEventListener('input', () => {
 volumeBar.addEventListener('input', () => {
     const vol = volumeBar.value / 100;
     audioPlayer.volume = vol;
+    if (gainNode) gainNode.gain.value = vol;
     volUpIcon.classList.toggle('hidden', vol === 0);
     volMuteIcon.classList.toggle('hidden', vol > 0);
 });
