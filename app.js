@@ -45,7 +45,7 @@ let isShuffle = false;
 let repeatMode = 0; 
 let isMuted = false;
 let previousVolume = 0.8;
-let dominantColor = 'rgba(34, 197, 94, 0.8)'; 
+let dominantColor = 'rgb(34, 197, 94)'; 
 let editingIndex = null;
 
 let audioContext = null;
@@ -278,7 +278,7 @@ function playSong(index) {
     } else {
         albumImg.classList.add('hidden');
         defaultAlbumIcon.classList.remove('hidden');
-        dominantColor = 'rgba(34, 197, 94, 0.8)';
+        dominantColor = 'rgb(34, 197, 94)';
         mainBody.style.background = ''; 
     }
 
@@ -291,7 +291,11 @@ function playSong(index) {
     }
 
     // Audio Setup
-    audioPlayer.crossOrigin = "anonymous"; 
+    if (song.src.startsWith('http')) {
+        audioPlayer.crossOrigin = "anonymous"; 
+    } else {
+        audioPlayer.removeAttribute('crossorigin');
+    }
     audioPlayer.src = song.src;
     audioPlayer.preload = 'auto'; 
     
@@ -310,6 +314,7 @@ function playAudio() {
         isPlaying = true;
         updatePlayButton();
         albumArt.classList.add('playing');
+        if (animationId) cancelAnimationFrame(animationId);
         drawVisualizer();
     }).catch(console.error);
 }
@@ -319,6 +324,7 @@ function pauseAudio() {
     isPlaying = false;
     updatePlayButton();
     albumArt.classList.remove('playing');
+    if (animationId) cancelAnimationFrame(animationId);
 }
 
 function togglePlay() {
