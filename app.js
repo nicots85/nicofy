@@ -122,7 +122,8 @@ function initAudioContext() {
         gainNode = audioContext.createGain();
         gainNode.gain.value = isMuted ? 0 : document.getElementById('volumeBar').value / 100;
 
-        source = audioContext.createMediaElementSource(audioPlayer);
+        // FIX: Solo enchufar el motor local avanzado. Si se enchufaba el dinámico por error, el navegador lo silenciaba
+        source = audioContext.createMediaElementSource(audioAdvanced);
         
         source.connect(bassNode);
         bassNode.connect(trebleNode);
@@ -512,21 +513,6 @@ bassEq.addEventListener('input', () => {
 });
 trebleEq.addEventListener('input', () => {
     if (trebleNode) trebleNode.gain.value = trebleEq.value;
-});
-
-// Control de Velocidad
-const speedBtns = document.querySelectorAll('.speed-btn');
-speedBtns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        const speed = parseFloat(e.target.dataset.speed);
-        audioPlayer.playbackRate = speed;
-        audioAdvanced.playbackRate = speed;
-        audioDirect.playbackRate = speed;
-        speedBtns.forEach(b => {
-            b.className = 'speed-btn px-3 py-1 rounded-full text-xs font-bold bg-gray-700 text-gray-400 hover:text-white transition-colors border border-transparent';
-        });
-        e.target.className = 'speed-btn active px-3 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/50';
-    });
 });
 
 // Eventos de Progreso, Tiempo y Memoria
