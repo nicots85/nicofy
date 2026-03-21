@@ -7,14 +7,41 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
     <link rel="stylesheet" href="styles.css">
+<style>
+    @keyframes dino_run_1s_steps_infinite {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-100%); }
+    }
+</style>
     <!-- Preload first song for faster start -->
     <link rel="preload" as="audio" href="https://archive.org/download/nicofy/01%20REC-2025-06-04.mp3" crossorigin>
     <link rel="prefetch" as="audio" href="https://archive.org/download/nicofy/01%20REC-2025-09-17.mp3" crossorigin>
+    <!-- Google Cast SDK -->
+    <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
     <meta name="theme-color" content="#1db954">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 <body class="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 min-h-screen text-white transition-colors duration-1000" id="mainBody">
+    
+    <!-- Splash Screen -->
+    <div id="splashScreen" class="fixed inset-0 flex flex-col items-center justify-center bg-gray-900/90 backdrop-blur-sm z-50">
+        <div class="text-center space-y-4">
+            <h3 class="text-2xl font-bold text-green-400">🦕 Cargando tu biblioteca...</h3>
+            <p class="text-gray-300 max-w-md">
+                La primera carga puede tomar un momento mientras preparamos tu música para la mejor experiencia
+            </p>
+            <!-- Dinosaurio animado simple usando emojis -->
+            <div class="text-5xl mb-4 inline-block animate-[dino_run_1s_steps_infinite]">
+                🦕🦕🦕🦕🦕🦕🦕🦕
+            </div>
+        </div>
+    </div>
+    
+    <!-- Song Loader -->
+    <div id="songLoader" class="absolute inset-0 flex items-center justify-center z-50 hidden">
+        <div class="w-12 h-12 border-4 border-green-500 border-t-transparent border-b-transparent rounded-full animate-[spin_1s_linear_infinite]"></div>
+    </div>
     
     <!-- Visualizador de Audio -->
     <canvas id="visualizer" class="fixed inset-0 w-full h-full"></canvas>
@@ -108,6 +135,13 @@
                 </button>
                 <input type="range" id="volumeBar" class="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-green-500" min="0" max="100" value="80">
             </div>
+            
+            <!-- Chromecast/AirPlay button -->
+            <button id="castBtn" class="p-2 sm:p-3 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors" title="Transmitir a dispositivo" aria-label="Transmitir a dispositivo">
+                <svg class="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 hover:text-white transition-colors" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 11c-2.8 0-5 2.2-5 5h2c0-1.6 1.2-3 3-3s3 1.4 3 3h2c0-2.8-2.2-5-5-5zm9-4H8V7h14v4z"/>
+                </svg>
+            </button>
 
             <!-- Controles Avanzados (V2) -->
             <div class="mt-8 pt-6 border-t border-gray-700/50">

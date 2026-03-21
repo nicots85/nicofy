@@ -55,6 +55,19 @@ const ARCHIVE_COLLECTION = 'nicofy'; // Cambia esto por tu colección real
 const DISCOVERY_INTERVAL_MS = 30 * 60 * 1000; // 30 minutos
 let isDiscovering = false;
 
+// Google Cast
+let castContext = null;
+let isCasting = false;
+
+// Audio context y visualizador (existing)
+let audioContext = null;
+let analyser = null;
+let source = null;
+let bassNode = null;
+let trebleNode = null;
+let gainNode = null;
+let animationId = null;
+
 let audioContext = null;
 let analyser = null;
 let source = null;
@@ -817,17 +830,161 @@ document.addEventListener('keydown', e => {
     if (e.code === 'ArrowLeft') audioPlayer.currentTime -= 5;
 });
 
-// Refresh button event listener
-const refreshArchiveBtn = document.getElementById('refreshArchiveBtn');
-if (refreshArchiveBtn) {
-    refreshArchiveBtn.addEventListener('click', discoverArchiveFiles);
-}
+// Refresh button event listener is already handled by existing declaration
 
 // Iniciar
 loadPlaylist();
-// Opcional: iniciar descubrimiento automático cada 30 minutos
-// startAutoDiscovery();
+// Descubrimiento automático al cargar + intervalo para actualizaciones periódicas
+discoverArchiveFiles(); // Ejecutar una vez inmediatamente al cargar
+archiveDiscoveryInterval = setInterval(() => {
+    if (!isDiscovering) {
+        discoverArchiveFiles();
+    }
+}, DISCOVERY_INTERVAL_MS);
 audioPlayer.volume = 0.8;
+
+// Initialize Google Cast
+window['__onGCastApiAvailable'] = function(isAvailable) {
+    if (isAvailable) {
+        initializeCastApi();
+    }
+};
+
+function initializeCastApi() {
+    const castOptions = {
+        receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID
+    };
+    
+    const apiConfig = new chrome.cast.ApiConfig(castOptions,
+        sessionListener,
+        receiverListener
+    );
+    
+    chrome.cast.initialize(apiConfig, onInitSuccess, onError);
+}
+
+function sessionListener(e) {
+    console.log('New cast session ID:' + e.sessionId);
+    window.session = e;
+    
+    // Add listener for session events
+    e.addUpdateListener(sessionUpdateListener);
+    e.addMessageListener('urn:x-cast:com.google.cast.media', 
+        function(namespace, message) {
+            // Handle media messages if needed
+        });
+}
+
+function sessionUpdateListener(e) {
+    if (!e) {
+        session = null;
+        isCasting = false;
+        updateCastButton();
+    }
+}
+
+function receiverListener(e) {
+    if (e === chrome.cast.ReceiverAvailability.AVAILABLE) {
+        console.log('Receiver found');
+    } else {
+        console.log('Receiver list empty');
+    }
+}
+
+function onInitSuccess() {
+    console.log('Cast initialization successful');
+}
+
+function onError(e) {
+    console.log('Cast initialization error: ' + e.code);
+}
+
+function updateCastButton() {
+    const castBtn = document.getElementById('castBtn');
+    if (!castBtn) return;
+    
+    if (isCasting) {
+        castBtn.classList.remove('bg-gray-700', 'hover:bg-gray-600');
+        castBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+        castBtn.title = 'Detener transmisión';
+        castBtn.setAttribute('aria-label', 'Detener transmisión');
+    } else {
+        castBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
+        castBtn.classList.add('bg-gray-700', 'hover:bg-gray-600');
+        castBtn.title = 'Transmitir a dispositivo';
+        castBtn.setAttribute('aria-label', 'Transmitir a dispositivo');
+    }
+}
+
+// Add event listener for cast button
+document.addEventListener('DOMContentLoaded', function() {
+    const castBtn = document.getElementById('castBtn');
+    if (castBtn) {
+        castBtn.addEventListener('click', function() {
+            if (!window.chrome || !chrome.cast) {
+                showNotification('Google Cast no está disponible en este navegador');
+                return;
+            }
+            
+            if (isCasting) {
+                stopCasting();
+            } else {
+                startCasting();
+            }
+        });
+    }
+});
+
+function startCasting() {
+    if (!window.session) {
+        showNotification('No hay sesión de transmisión disponible');
+        return;
+    }
+    
+    // Create media info
+    const mediaInfo = new chrome.cast.media.MediaInfo(audioPlayer.currentSrc);
+    mediaInfo.contentType = 'audio/mpeg'; // Assuming MP3, adjust if needed
+    mediaInfo.streamType = chrome.cast.media.StreamType.BUFFERED;
+    mediaInfo.metadata = new chrome.cast.media.GenericMediaMetadata();
+    mediaInfo.metadata.title = songTitle.textContent;
+    mediaInfo.metadata.subtitle = artistName.textContent;
+    if (albumImg.src) {
+        mediaInfo.metadata.images = [{ 'url': albumImg.src }];
+    }
+    
+    const request = new chrome.cast.media.LoadRequest(mediaInfo);
+    window.session.loadMedia(request, 
+        function() {
+            isCasting = true;
+            updateCastButton();
+            showNotification('Transmitiendo a dispositivo...');
+        },
+        function(error) {
+            showNotification('Error al transmitir: ' + error.description);
+            console.error('Error casting:', error);
+        }
+    );
+}
+
+function stopCasting() {
+    if (!window.session) {
+        isCasting = false;
+        updateCastButton();
+        return;
+    }
+    
+    window.session.stop(
+        function() {
+            isCasting = false;
+            updateCastButton();
+            showNotification('Transmisión detenida');
+        },
+        function(error) {
+            showNotification('Error al detener transmisión: ' + error.description);
+            console.error('Error stopping cast:', error);
+        }
+    );
+}
 
 // Register service worker for caching
 if ('serviceWorker' in navigator) {
