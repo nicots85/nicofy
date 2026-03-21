@@ -135,13 +135,16 @@ async function loadPlaylist() {
         const response = await fetch('config.json');
         const data = await response.json();
         playlist = data.songs || [];
-        // Map local files from json properly
-        playlist = playlist.map(s => ({...s, src: \`music/\${s.file}\`}));
+        // Map songs properly: use remote URL if provided, otherwise default to music/ folder
+        playlist = playlist.map(s => ({
+            ...s, 
+            src: (s.file && s.file.startsWith('http')) ? s.file : `music/${s.file}`
+        }));
         originalPlaylist = [...playlist];
         renderPlaylist();
     } catch (error) {
         console.error('Error cargando playlist:', error);
-        playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">Agrega tu música en /music o arrastra archivos aquí.</p>';
+        playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">Agregamos tu música en /music o arrastramos archivos aquí.</p>';
     }
 }
 
@@ -154,21 +157,21 @@ function renderPlaylist() {
 
     playlistEl.innerHTML = playlist.map((song, index) => {
         let isActive = song === playlist[currentIndex];
-        return \`
-        <div class="playlist-item p-3 rounded-lg bg-gray-700/50 flex items-center gap-3 \${isActive ? 'active' : ''}" data-index="\${index}">
+        return `
+        <div class="playlist-item p-3 rounded-lg bg-gray-700/50 flex items-center gap-3 ${isActive ? 'active' : ''}" data-index="${index}">
             <div class="w-10 h-10 rounded bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center flex-shrink-0 overflow-hidden relative">
-                \${song.image ? \`<img src="\${song.image}" class="w-full h-full object-cover">\` : 
-                \`<svg class="w-5 h-5 text-white/70" fill="currentColor" viewBox="0 0 24 24">
+                ${song.image ? `<img src="${song.image}" class="w-full h-full object-cover">` : 
+                `<svg class="w-5 h-5 text-white/70" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-                </svg>\`}
+                </svg>`}
             </div>
             <div class="flex-1 min-w-0">
-                <p class="font-medium truncate \${isActive ? 'text-green-400' : 'text-gray-100'}">\${song.title || song.file}</p>
-                <p class="text-xs text-gray-400 truncate">\${song.artist || 'Artista desconocido'}</p>
+                <p class="font-medium truncate ${isActive ? 'text-green-400' : 'text-gray-100'}">${song.title || song.file}</p>
+                <p class="text-xs text-gray-400 truncate">${song.artist || 'Artista desconocido'}</p>
             </div>
-            \${isActive ? '<svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>' : ''}
+            ${isActive ? '<svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>' : ''}
         </div>
-    \`}).join('');
+    `;}).join('');
 
     document.querySelectorAll('.playlist-item').forEach(item => {
         item.addEventListener('click', () => {
@@ -200,7 +203,7 @@ function playSong(index) {
         albumImg.onload = () => {
             const color = getAverageColor(albumImg);
             dominantColor = color;
-            mainBody.style.background = \`linear-gradient(to bottom right, #111827, \${color.replace('rgb', 'rgba').replace(')', ', 0.15)')}, #111827)\`;
+            mainBody.style.background = `linear-gradient(to bottom right, #111827, ${color.replace('rgb', 'rgba').replace(')', ', 0.15)')}, #111827)`;
         };
     } else {
         albumImg.classList.add('hidden');
@@ -211,6 +214,11 @@ function playSong(index) {
 
     // Update Media Session
     if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('play', playAudio);
+        navigator.mediaSession.setActionHandler('pause', pauseAudio);
+        navigator.mediaSession.setActionHandler('previoustrack', goPrev);
+        navigator.mediaSession.setActionHandler('nexttrack', goNext);
+
         navigator.mediaSession.metadata = new MediaMetadata({
             title: song.title || song.file,
             artist: song.artist || 'Artista desconocido',
@@ -218,8 +226,10 @@ function playSong(index) {
         });
     }
 
+    // Set source and preload it
     audioPlayer.src = song.src;
-    audioPlayer.preload = 'auto'; // Faster start
+    audioPlayer.crossOrigin = "anonymous"; // CRITICAL for CORS & Visualizer to work
+    audioPlayer.preload = 'auto'; 
     
     playBtn.addEventListener('click', initAudioContext, { once: true });
     playAudio();
@@ -268,7 +278,7 @@ const formatTime = seconds => {
     if (isNaN(seconds)) return '0:00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return \`\${mins}:\${secs.toString().padStart(2, '0')}\`;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
 // Next & Prev Logic
@@ -433,7 +443,7 @@ function handleDrop(e) {
                             base64String += String.fromCharCode(tags.picture.data[i]);
                         }
                         const imageBase64 = btoa(base64String);
-                        imageBlobUrl = \`data:\${tags.picture.format};base64,\${imageBase64}\`;
+                        imageBlobUrl = `data:${tags.picture.format};base64,${imageBase64}`;
                     }
                     const song = {
                         file: file.name,
@@ -482,14 +492,6 @@ document.addEventListener('keydown', e => {
         audioPlayer.currentTime -= 5;
     }
 });
-
-// Media Session API Support
-if ('mediaSession' in navigator) {
-    navigator.mediaSession.setActionHandler('play', playAudio);
-    navigator.mediaSession.setActionHandler('pause', pauseAudio);
-    navigator.mediaSession.setActionHandler('previoustrack', goPrev);
-    navigator.mediaSession.setActionHandler('nexttrack', goNext);
-}
 
 // Wake Lock / Visibility
 document.addEventListener('visibilitychange', () => {

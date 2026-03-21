@@ -1,21 +1,29 @@
 {
   "songs": [
     {
-      "file": "cancion1.mp3",
-      "title": "Mi Canción 1",
-      "artist": "Nico",
-      "image": "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&q=80"
+      "file": "https://archive.org/download/nicofy/01%20REC-2025-06-04.wav",
+      "title": "Set Live (04-06-25)",
+      "artist": "DJ Nico"
     },
     {
-      "file": "cancion2.mp3",
-      "title": "Mi Canción 2",
-      "artist": "Nico",
-      "image": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=80"
+      "file": "https://archive.org/download/nicofy/01%20REC-2025-09-17.wav",
+      "title": "Set Live (17-09-25)",
+      "artist": "DJ Nico"
     },
     {
-      "file": "cancion3.mp3",
-      "title": "Mi Canción 3",
-      "artist": "Nico"
+      "file": "https://archive.org/download/nicofy/01%20REC-2025-11-23.wav",
+      "title": "Set Live (23-11-25)",
+      "artist": "DJ Nico"
+    },
+    {
+      "file": "https://archive.org/download/nicofy/01%20REC-2026-02-28.wav",
+      "title": "Set Live (28-02-26)",
+      "artist": "DJ Nico"
+    },
+    {
+      "file": "https://archive.org/download/nicofy/01%20REC-2026-03-20.wav",
+      "title": "Set Live (20-03-26)",
+      "artist": "DJ Nico"
     }
   ]
 }
