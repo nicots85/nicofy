@@ -817,6 +817,12 @@ document.addEventListener('keydown', e => {
     if (e.code === 'ArrowLeft') audioPlayer.currentTime -= 5;
 });
 
+// Refresh button event listener
+const refreshArchiveBtn = document.getElementById('refreshArchiveBtn');
+if (refreshArchiveBtn) {
+    refreshArchiveBtn.addEventListener('click', discoverArchiveFiles);
+}
+
 // Iniciar
 loadPlaylist();
 // Opcional: iniciar descubrimiento automático cada 30 minutos
