@@ -1,0 +1,21 @@
+{
+  "songs": [
+    {
+      "file": "cancion1.mp3",
+      "title": "Mi Canción 1",
+      "artist": "Nico",
+      "image": "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&q=80"
+    },
+    {
+      "file": "cancion2.mp3",
+      "title": "Mi Canción 2",
+      "artist": "Nico",
+      "image": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=80"
+    },
+    {
+      "file": "cancion3.mp3",
+      "title": "Mi Canción 3",
+      "artist": "Nico"
+    }
+  ]
+}
