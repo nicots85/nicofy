@@ -2,7 +2,10 @@
 // ============================================
 
 // Elementos del DOM
-const audioPlayer = document.getElementById('audioPlayer');
+const audioAdvanced = document.getElementById('audioPlayer'); // Motor 1: Conectado al EQ (Lento/Locales)
+const audioDirect = new Audio(); // Motor 2: Ultra Liviano (Streaming Nativo/Archive.org)
+let audioPlayer = audioAdvanced; // El motor activo actual
+
 const playBtn = document.getElementById('playBtn');
 const playIcon = document.getElementById('playIcon');
 const pauseIcon = document.getElementById('pauseIcon');
@@ -141,7 +144,20 @@ function drawVisualizer() {
 
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
-    analyser.getByteFrequencyData(dataArray);
+    
+    if (audioPlayer === audioAdvanced) {
+        analyser.getByteFrequencyData(dataArray);
+    } else {
+        // Para el motor rápido remoto creamos un visualizador ambiental falso
+        if (isPlaying) {
+            for (let i = 0; i < bufferLength; i++) {
+                const noise = Math.random() * 60;
+                const wave = Math.sin(Date.now() / 200 + i * 0.1) * 40;
+                dataArray[i] = Math.max(0, (noise + wave + 50) * audioPlayer.volume);
+            }
+        }
+    }
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const barWidth = (canvas.width / bufferLength) * 2.5;
@@ -325,13 +341,28 @@ function playSong(index, startTime = 0, autoPlay = true) {
         });
     }
 
+    // Stop old engine
+    audioPlayer.pause();
+    
+    // Determinar qué motor usar: Remoto = Rápido (sin EQ), Local = Avanzado (con EQ)
+    const isRemote = song.src.startsWith('http');
+    audioPlayer = isRemote ? audioDirect : audioAdvanced;
+    
+    // Feedback visual del Ecualizador
+    const eqPanel = document.getElementById('eqPanel');
+    if (eqPanel) {
+        if (isRemote) eqPanel.classList.add('opacity-30', 'pointer-events-none');
+        else eqPanel.classList.remove('opacity-30', 'pointer-events-none');
+    }
+
     // Audio Setup
-    audioPlayer.src = ''; // Limpiar buffer para Safari
-    // FIX SAFARI BUG: Siempre anonymous para no romper el MediaElementSourceNode de WebKit al cambiar de src
-    audioPlayer.crossOrigin = "anonymous"; 
+    audioPlayer.src = '';
+    if (!isRemote) {
+        audioPlayer.crossOrigin = "anonymous"; 
+    }
     audioPlayer.src = song.src;
-    audioPlayer.preload = 'metadata'; // Optimización de red: no descargar todo de golpe
-    audioPlayer.load(); // Obligar a recargar reglas CORS 
+    audioPlayer.preload = 'metadata'; // Optimización de red
+    if (!isRemote) audioPlayer.load(); 
     
     // Asignar el tiempo de inicio guardado (set timeout para asegurar que el buffer esté listo en Safari)
     if (startTime > 0) {
@@ -447,6 +478,8 @@ function toggleMute() {
     if (isMuted) {
         previousVolume = volumeBar.value / 100;
         audioPlayer.volume = 0;
+        audioAdvanced.volume = 0;
+        audioDirect.volume = 0;
         if (gainNode) gainNode.gain.value = 0;
         volumeBar.value = 0;
         volUpIcon.classList.add('hidden');
@@ -454,6 +487,8 @@ function toggleMute() {
     } else {
         const vol = previousVolume || 0.8;
         audioPlayer.volume = vol;
+        audioAdvanced.volume = vol;
+        audioDirect.volume = vol;
         if (gainNode) gainNode.gain.value = vol;
         volumeBar.value = vol * 100;
         volUpIcon.classList.remove('hidden');
@@ -485,6 +520,8 @@ speedBtns.forEach(btn => {
     btn.addEventListener('click', (e) => {
         const speed = parseFloat(e.target.dataset.speed);
         audioPlayer.playbackRate = speed;
+        audioAdvanced.playbackRate = speed;
+        audioDirect.playbackRate = speed;
         speedBtns.forEach(b => {
             b.className = 'speed-btn px-3 py-1 rounded-full text-xs font-bold bg-gray-700 text-gray-400 hover:text-white transition-colors border border-transparent';
         });
@@ -493,21 +530,32 @@ speedBtns.forEach(btn => {
 });
 
 // Eventos de Progreso, Tiempo y Memoria
-audioPlayer.addEventListener('timeupdate', () => {
-    const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
-    progressBar.value = progress || 0;
-    currentTimeEl.textContent = formatTime(audioPlayer.currentTime);
+[audioAdvanced, audioDirect].forEach(player => {
+    player.addEventListener('timeupdate', () => {
+        if (player !== audioPlayer) return; // Ignorar el motor inactivo
+        const progress = (player.currentTime / player.duration) * 100;
+        progressBar.value = progress || 0;
+        currentTimeEl.textContent = formatTime(player.currentTime);
+        
+        // Guardar progreso cada ~5 segundos aprox
+        if (Math.floor(player.currentTime) > 0 && Math.floor(player.currentTime) % 5 === 0) {
+            localStorage.setItem('nicofy_progress', JSON.stringify({
+                index: currentIndex,
+                time: player.currentTime
+            }));
+        }
+    });
     
-    // Guardar progreso cada ~5 segundos aprox
-    if (Math.floor(audioPlayer.currentTime) > 0 && Math.floor(audioPlayer.currentTime) % 5 === 0) {
-        localStorage.setItem('nicofy_progress', JSON.stringify({
-            index: currentIndex,
-            time: audioPlayer.currentTime
-        }));
-    }
+    player.addEventListener('loadedmetadata', () => {
+        if (player !== audioPlayer) return;
+        durationEl.textContent = formatTime(player.duration);
+    });
+    
+    player.addEventListener('ended', () => {
+        if (player !== audioPlayer) return;
+        goNext();
+    });
 });
-audioPlayer.addEventListener('loadedmetadata', () => durationEl.textContent = formatTime(audioPlayer.duration));
-audioPlayer.addEventListener('ended', goNext);
 
 progressBar.addEventListener('input', () => {
     const time = (progressBar.value / 100) * audioPlayer.duration;
@@ -516,6 +564,8 @@ progressBar.addEventListener('input', () => {
 volumeBar.addEventListener('input', () => {
     const vol = volumeBar.value / 100;
     audioPlayer.volume = vol;
+    audioAdvanced.volume = vol;
+    audioDirect.volume = vol;
     if (gainNode) gainNode.gain.value = vol;
     volUpIcon.classList.toggle('hidden', vol === 0);
     volMuteIcon.classList.toggle('hidden', vol > 0);

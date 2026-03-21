@@ -1,0 +1,9 @@
+# Ignorar archivos MP3 (agrega tu música manualmente)
+music/*.mp3
+
+# Ignorar archivos de sistema
+.DS_Store
+Thumbs.db
+
+# Ignorar logs
+*.log
