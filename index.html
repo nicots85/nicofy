@@ -25,16 +25,14 @@
 <body class="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 min-h-screen text-white transition-colors duration-1000" id="mainBody">
     
     <!-- Splash Screen -->
-    <div id="splashScreen" class="fixed inset-0 flex flex-col items-center justify-center bg-gray-900/90 backdrop-blur-sm z-50">
+    <div id="splashScreen" class="fixed inset-0 flex flex-col items-center justify-center bg-gray-900/90 backdrop-blur-sm z-50 transition-opacity duration-300">
         <div class="text-center space-y-4">
             <h3 class="text-2xl font-bold text-green-400">🦕 Cargando tu biblioteca...</h3>
             <p class="text-gray-300 max-w-md">
                 La primera carga puede tomar un momento mientras preparamos tu música para la mejor experiencia
             </p>
-            <!-- Dinosaurio animado simple usando emojis -->
-            <div class="text-5xl mb-4 inline-block animate-[dino_run_1s_steps_infinite]">
-                🦕🦕🦕🦕🦕🦕🦕🦕
-            </div>
+            <!-- Dinosaurio que sigue el cursor -->
+            <div id="dino" class="text-6xl absolute left-0 top-0 z-10 transition-left duration-100 transition-top duration-100">🦕</div>
         </div>
     </div>
     

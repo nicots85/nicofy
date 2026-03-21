@@ -986,6 +986,30 @@ function stopCasting() {
     );
 }
 
+// Dino follow cursor
+let dino = null;
+let splashScreen = null;
+function initDinoFollower() {
+    dino = document.getElementById('dino');
+    splashScreen = document.getElementById('splashScreen');
+    if (!dino || !splashScreen) return;
+    
+    function moveDino(e) {
+        if (!splashScreen || splashScreen.classList.contains('hidden') || 
+            splashScreen.classList.contains('opacity-0')) {
+            // Remove listener when splash screen is hidden
+            document.removeEventListener('mousemove', moveDino);
+            return;
+        }
+        const x = e.clientX;
+        const y = e.clientY;
+        // Set position with some offset to avoid cursor covering
+        dino.style.left = (x - 20) + 'px'; // adjust offset as needed
+        dino.style.top = (y - 20) + 'px';
+    }
+    document.addEventListener('mousemove', moveDino);
+}
+
 // Register service worker for caching
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').then(reg => {
@@ -993,4 +1017,11 @@ if ('serviceWorker' in navigator) {
   }).catch(err => {
     console.log('ServiceWorker registration failed: ', err);
   });
+}
+
+// Initialize dino follower after DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initDinoFollower);
+} else {
+  initDinoFollower();
 }
