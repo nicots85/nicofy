@@ -183,59 +183,30 @@ function drawVisualizer() {
 // Cargar configuración de canciones -直接从archive.org获取
 async function loadPlaylist() {
     try {
-        console.log('Iniciando carga de playlist...');
-        
         const ARCHIVE_COLLECTION = 'nicofy';
         let items = [];
         
-        // Primero intentar con JSONP (evita CORS)
+        // Intentar con fetch primero
         try {
-            console.log('Intentando con JSONP...');
-            const jsonpResult = await new Promise((resolve, reject) => {
-                const callbackName = 'archiveCallback_' + Date.now();
-                window[callbackName] = (data) => {
-                    resolve(data);
-                    delete window[callbackName];
-                };
-                
-                const script = document.createElement('script');
-                script.src = `https://archive.org/advancedsearch.php?q=collection:${ARCHIVE_COLLECTION}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&rows=100&page=1&output=json&callback=${callbackName}`;
-                script.onerror = () => reject(new Error('JSONP failed'));
-                document.head.appendChild(script);
-                
-                // Timeout after 10 seconds
-                setTimeout(() => {
-                    delete window[callbackName];
-                    reject(new Error('JSONP timeout'));
-                }, 10000);
+            const archiveResponse = await fetch(`https://archive.org/advancedsearch.php?q=collection:${ARCHIVE_COLLECTION}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&rows=100&page=1&output=json`, {
+                method: 'GET',
+                mode: 'cors',
+                cache: 'no-cache'
             });
             
-            if (jsonpResult && jsonpResult.response && jsonpResult.response.docs) {
-                items = jsonpResult.response.docs;
-                console.log('JSONP exitoso, items:', items.length);
+            if (archiveResponse.ok) {
+                const archiveData = await archiveResponse.json();
+                items = archiveData.response.docs || [];
+                console.log('Archive.org APIok, items:', items.length);
             }
-        } catch (jsonpError) {
-            console.log('JSONP falló:', jsonpError.message, '- intentando con fetch...');
-            
-            // Fallback: intentar con fetch normal
-            try {
-                const archiveResponse = await fetch(`https://archive.org/advancedsearch.php?q=collection:${ARCHIVE_COLLECTION}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&rows=100&page=1&output=json`);
-                
-                if (archiveResponse.ok) {
-                    const archiveData = await archiveResponse.json();
-                    items = archiveData.response.docs || [];
-                    console.log('Fetch exitoso, items:', items.length);
-                }
-            } catch (fetchError) {
-                console.log('Fetch también falló:', fetchError.message);
-            }
+        } catch (e) {
+            console.log('Fetch error:', e.message);
         }
         
         // Filtrar items válidos
         const validItems = items.filter(item => item.identifier);
-        console.log('Items válidos:', validItems.length);
         
-        // Generar URLs deMP3
+        // Generar URLs de MP3
         const rawSongs = validItems.map(item => {
             const identifier = item.identifier;
             const mp3Url = `https://archive.org/download/${ARCHIVE_COLLECTION}/${encodeURIComponent(identifier)}.mp3`;
@@ -247,8 +218,6 @@ async function loadPlaylist() {
                 image: null
             };
         });
-        
-        console.log('Canciones generadas:', rawSongs.length);
         
         const overrides = getOverrides();
         
@@ -263,67 +232,18 @@ async function loadPlaylist() {
             };
         });
         
-        console.log('Playlist final:', playlist.length, 'canciones');
-        
         originalPlaylist = [...playlist];
         
         if (playlist.length === 0) {
-            playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">No hay canciones en tu colección de archive.org.<br>Sube archivos WAV o MP3 a tu colección "nicofy" en <a href="https://archive.org" target="_blank" class="text-green-500 hover:underline">archive.org</a></p>';
+            playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">No hay canciones.<br>Sube archivos a tu colección en archive.org</p>';
         }
         
-        const saved = localStorage.getItem('nicofy_progress');
-        if (saved && playlist.length > 0) {
-            const { index, time } = JSON.parse(saved);
-            if (index >= 0 && index < playlist.length) {
-                renderPlaylist();
-                hideSplashScreen();
-                playSong(index, time, false);
-                return;
-            }
-        }
         renderPlaylist();
         hideSplashScreen();
     } catch (error) {
         console.error('Error cargando playlist:', error);
         hideSplashScreen();
-        playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">Error al cargar: ' + error.message + '<br>Abre la consola (F12) para más detalles</p>';
-    }
-}
-        
-        console.log('Playlist final:', playlist.length, 'canciones');
-        
-        originalPlaylist = [...playlist];
-        
-        // 如果没有歌曲，显示消息
-        if (playlist.length === 0) {
-            playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">No hay canciones en tu colección de archive.org.<br>Sube archivos WAV o MP3 a tu colección "nicofy" en <a href="https://archive.org" target="_blank" class="text-green-500 hover:underline">archive.org</a></p>';
-        }
-        
-        // Restore progress or just render
-        const saved = localStorage.getItem('nicofy_progress');
-        if (saved && playlist.length > 0) {
-            const { index, time } = JSON.parse(saved);
-            if (index >= 0 && index < playlist.length) {
-                renderPlaylist();
-                hideSplashScreen();
-                playSong(index, time, false);
-                return;
-            }
-        }
-        renderPlaylist();
-        hideSplashScreen();
-    } catch (error) {
-        console.error('Error cargando playlist:', error);
-        // 即使出错也隐藏splash screen
-        hideSplashScreen();
-        
-        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-            playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">No se pudo conectar a archive.org.<br>Verifica tu conexión a internet e intenta nuevamente.</p>';
-        } else if (error.name === 'SyntaxError') {
-            playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">Error al leer los datos de archive.org.</p>';
-        } else {
-            playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">Error al cargar la lista: ' + error.message + '</p>';
-        }
+        playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">Error al cargar. Intenta recargar la página.</p>';
     }
 }
 
@@ -925,13 +845,7 @@ document.addEventListener('keydown', e => {
 
 // Iniciar
 loadPlaylist();
-// Descubrimiento automático al cargar + intervalo para actualizaciones periódicas
-discoverArchiveFiles(); // Ejecutar una vez inmediatamente al cargar
-archiveDiscoveryInterval = setInterval(() => {
-    if (!isDiscovering) {
-        discoverArchiveFiles();
-    }
-}, DISCOVERY_INTERVAL_MS);
+// Nota: El botón de refresh ejecuta discoverArchiveFiles() manualmente
 audioPlayer.volume = 0.8;
 
 // Initialize Google Cast
@@ -1139,7 +1053,7 @@ if (document.readyState === 'loading') {
   initDinoFollower();
 }
 
-// Auto-hide splash screen after 15 seconds as a safety net
+// Auto-hide splash screen after 8 seconds as a safety net
 setTimeout(() => {
     hideSplashScreen();
-}, 15000);
+}, 8000);
