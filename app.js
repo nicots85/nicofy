@@ -235,9 +235,7 @@ async function loadPlaylist() {
         console.log(`✅ Playlist generada: ${rawSongs.length} canciones`);
         
         const overrides = getOverrides();
-        
-        const overrides = getOverrides();
-        
+                
         playlist = rawSongs.map(s => {
             const override = overrides[s.file];
             return {
