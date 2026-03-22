@@ -116,7 +116,8 @@ const kittens = [
     'images/dj_kitten_cyberpunk.png',
     'images/dj_kitten_festival.png',
     'images/dj_kitten_lofi.png',
-    'images/dj_kitten_space.png'
+    'images/dj_kitten_space.png',
+    'images/dj_kitten_tokyo.png'
 ];
 
 function getKittenFor(filename) {
