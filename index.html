@@ -60,9 +60,9 @@
     <canvas id="visualizer" class="fixed inset-0 w-full h-full opacity-30 mix-blend-screen pointer-events-none z-0"></canvas>
 
     <!-- Main Layout -->
-    <div class="flex-1 flex overflow-hidden relative z-10">
+    <div class="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative z-10 custom-scrollbar">
         <!-- Hero Section (Left/Center) -->
-        <main class="flex-1 flex flex-col items-center justify-center p-6 relative">
+        <main class="lg:flex-1 shrink-0 flex flex-col items-center justify-center p-6 relative min-h-[60vh] lg:min-h-0">
             <div class="w-full max-w-2xl text-center flex flex-col items-center relative group">
                 <!-- Cover Art -->
                 <div id="albumArt" class="relative w-64 h-64 sm:w-[400px] sm:h-[400px] rounded-3xl bg-gray-900/60 neo-shadow flex items-center justify-center overflow-hidden transition-all duration-700 mx-auto">
@@ -86,7 +86,7 @@
         </main>
 
         <!-- Right Panel: Playlist -->
-        <aside class="w-full sm:w-[400px] glass-panel border-l border-white/5 flex flex-col shrink-0 z-20">
+        <aside class="w-full sm:w-[450px] lg:w-[400px] mx-auto lg:mx-0 glass-panel border-t lg:border-t-0 lg:border-l border-white/5 flex flex-col shrink-0 z-20 min-h-[60vh] lg:min-h-0">
             <!-- Header -->
             <div class="p-6 border-b border-white/5 flex items-center justify-between bg-black/30">
                 <h3 class="font-bold text-xl tracking-tight flex items-center gap-2 text-white">

@@ -111,6 +111,22 @@ let trebleNode = null;
 let gainNode = null;
 let animationId = null;
 
+const kittens = [
+    'images/dj_kitten_beach.png',
+    'images/dj_kitten_cyberpunk.png',
+    'images/dj_kitten_festival.png',
+    'images/dj_kitten_lofi.png',
+    'images/dj_kitten_space.png'
+];
+
+function getKittenFor(filename) {
+    let hash = 0;
+    for (let i = 0; i < filename.length; i++) {
+        hash = filename.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return kittens[Math.abs(hash) % kittens.length];
+}
+
 // Configurar canvas
 
 function resizeCanvas() {
@@ -283,7 +299,7 @@ async function loadPlaylist() {
                 file: mp3Url,
                 title: item.title || filename.replace('.mp3', '').replace(/_/g, ' '),
                 artist: item.creator || 'DJ Nico',
-                image: null
+                image: getKittenFor(filename)
             };
         });
         
@@ -574,7 +590,7 @@ async function discoverArchiveFiles() {
                 file: mp3Url,
                 title: file.title || filename.replace('.mp3', ''),
                 artist: file.creator || 'Desconocido',
-                image: null,
+                image: getKittenFor(filename),
                 src: mp3Url
             };
         });
@@ -641,7 +657,7 @@ async function discoverArchiveFiles() {
                 finalMeta = {
                     title: archiveMeta.title,
                     artist: archiveMeta.artist,
-                    image: null
+                    image: getKittenFor(filename)
                 };
             }
             
