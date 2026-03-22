@@ -188,28 +188,28 @@ async function loadPlaylist() {
         const ARCHIVE_COLLECTION = 'nicofy';
         let items = [];
         
-        // Obtener todos los items de la colección
+        // Obtener todos los items del item (no es una colección)
         try {
-            console.log('📡 Consultando archive.org...');
+            console.log('📡 Consultando archive.org metadata...');
             const archiveResponse = await fetch(
-                `https://archive.org/advancedsearch.php?q=collection:${ARCHIVE_COLLECTION}&fl[]=identifier&fl[]=title&fl[]=creator&rows=200&page=1&output=json`,
+                `https://archive.org/metadata/${ARCHIVE_COLLECTION}`,
                 { method: 'GET', mode: 'cors', cache: 'no-cache' }
             );
             
             if (archiveResponse.ok) {
                 const archiveData = await archiveResponse.json();
-                const allItems = archiveData.response.docs || [];
-                console.log(`📁 Total de items en colección: ${allItems.length}`);
+                const allFiles = archiveData.files || [];
+                console.log(`📁 Total de archivos en el ítem: ${allFiles.length}`);
                 
-                // Filtrar solo los que son archivos MP3 (identificador termina en .mp3)
-                items = allItems.filter(item => 
-                    item.identifier && item.identifier.toLowerCase().endsWith('.mp3')
+                // Filtrar solo los que son archivos MP3
+                items = allFiles.filter(item => 
+                    item.name && item.name.toLowerCase().endsWith('.mp3')
                 );
                 console.log(`🎵 Items MP3 encontrados: ${items.length}`);
                 
-                // Mostrar los identificadores encontrados
+                // Mostrar los archivos encontrados
                 if (items.length > 0) {
-                    console.log('📋 Identificadores MP3:', items.map(i => i.identifier).join(', '));
+                    console.log('📋 Archivos MP3:', items.map(i => i.name).join(', '));
                 }
             } else {
                 console.log('❌ Error en respuesta:', archiveResponse.status);
@@ -220,21 +220,19 @@ async function loadPlaylist() {
         
         // Generar URLs de MP3
         const rawSongs = items.map(item => {
-            const identifier = item.identifier;
+            const filename = item.name;
             // URL directa al archivo MP3 en archive.org
-            const mp3Url = `https://archive.org/download/${ARCHIVE_COLLECTION}/${encodeURIComponent(identifier)}`;
+            const mp3Url = `https://archive.org/download/${ARCHIVE_COLLECTION}/${encodeURIComponent(filename)}`;
             
             return {
                 file: mp3Url,
-                title: item.title || identifier.replace('.mp3', '').replace(/_/g, ' '),
+                title: item.title || filename.replace('.mp3', '').replace(/_/g, ' '),
                 artist: item.creator || 'DJ Nico',
                 image: null
             };
         });
         
         console.log(`✅ Playlist generada: ${rawSongs.length} canciones`);
-        
-        const overrides = getOverrides();
         
         const overrides = getOverrides();
         
@@ -483,36 +481,32 @@ async function discoverArchiveFiles() {
     }
 
     try {
-        // Usar la API de archive.org para buscar ítems en la colección
-        const response = await fetch(`https://archive.org/advancedsearch.php?q=collection:${ARCHIVE_COLLECTION}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&rows=100&page=1&output=json`);
+        // Usar la API metadata de archive.org para buscar archivos en el ítem
+        const response = await fetch(`https://archive.org/metadata/${ARCHIVE_COLLECTION}`);
         
         if (!response.ok) {
             throw new Error(`Error de archive.org: ${response.status}`);
         }
         
         const data = await response.json();
-        const items = data.response.docs || [];
+        const allFiles = data.files || [];
         
-        // Filtrar solo los que tienen identificador (evitar vacíos)
-        const validItems = items.filter(item => item.identifier);
+        // Filtrar solo los que tienen nombre terminando en .mp3 (evitar vacíos)
+        const validItems = allFiles.filter(f => f.name && f.name.toLowerCase().endsWith('.mp3'));
         
         // Obtener overrides actuales para preservar metadatos editados
         const overrides = getOverrides();
         
         // Convertir a formato de canción
-        const discoveredSongs = validItems.map(item => {
-            const identifier = item.identifier;
-            // Intentar obtener el primer archivo MP3 asociado
-            // En la práctica, necesitaríamos consultar los archivos de cada ítem,
-            // pero para simplificar asumimos que hay un MP3 con el mismo nombre
-            // En una implementación real, podríamos necesitar otra llamada a la API
-            const mp3Url = `https://archive.org/download/${ARCHIVE_COLLECTION}/${encodeURIComponent(identifier)}.mp3`;
+        const discoveredSongs = validItems.map(file => {
+            const filename = file.name;
+            const mp3Url = `https://archive.org/download/${ARCHIVE_COLLECTION}/${encodeURIComponent(filename)}`;
             
             return {
                 file: mp3Url,
-                title: item.title || identifier,
-                artist: item.creator || 'Desconocido',
-                image: null, // Podríamos intentar obtener una portada si existe
+                title: file.title || filename.replace('.mp3', ''),
+                artist: file.creator || 'Desconocido',
+                image: null,
                 src: mp3Url
             };
         });
@@ -521,71 +515,65 @@ async function discoverArchiveFiles() {
         // Primero, separar archivos locales (drag & drop) de los de archive.org
         const localFiles = playlist.filter(song => !song.file.includes('archive.org/download/'));
         
-        // Crear un mapa de los ítems actuales de archive.org por identificador
+        // Crear un mapa de los ítems actuales de archive.org por filename
         const archiveOrgMap = new Map();
-        for (const item of validItems) {
-            const identifier = item.identifier;
-            archiveOrgMap.set(identifier, {
-                title: item.title || identifier,
-                artist: item.creator || 'Desconocido'
+        for (const file of validItems) {
+            const filename = file.name;
+            archiveOrgMap.set(filename, {
+                title: file.title || filename.replace('.mp3', ''),
+                artist: file.creator || 'Desconocido'
             });
         }
         
-        // Crear un mapa de nuestras canciones existentes de archive.org por identificador
+        // Crear un mapa de nuestras canciones existentes de archive.org por filename
         const existingArchiveMap = new Map();
         for (const song of playlist) {
             if (song.file.includes('archive.org/download/')) {
-                // Extraer identificador de la URL: 
-                // https://archive.org/download/nicofy/01%20REC-2025-06-04.mp3?v=1
                 try {
                     const urlObj = new URL(song.file);
-                    const pathname = urlObj.pathname; // /nicofy/01%20REC-2025-06-04.mp3
-                    const parts = pathname.split('/').filter(Boolean); // ["nicofy", "01%20REC-2025-06-04.mp3"]
-                    if (parts.length >= 2) {
-                        const filename = parts[1]; // "01%20REC-2025-06-04.mp3"
-                        // Quitar extensión .mp3 y decodificar
-                        const identifier = decodeURIComponent(filename.replace(/\.mp3$/i, ''));
-                        existingArchiveMap.set(identifier, song);
+                    const parts = urlObj.pathname.split('/').filter(Boolean); 
+                    if (parts.length >= 3) {
+                        const filename = decodeURIComponent(parts[parts.length - 1]); 
+                        existingArchiveMap.set(filename, song);
                     }
                 } catch (e) {
-                    // Si falla la extracción, ignorar esta canción para sincronización
-                    // (probablemente sea un archivo local con formato inesperado)
+                    // Ignorar
                 }
             }
         }
         
         // Construir la nueva lista de canciones de archive.org
         const newArchiveSongs = [];
-        for (const [identifier, archiveMeta] of archiveOrgMap) {
-            // Construir la URL estándar para este identificador
-            const fileURL = `https://archive.org/download/${ARCHIVE_COLLECTION}/${encodeURIComponent(identifier)}.mp3`;
+        const currentOverrides = getOverrides();
+        for (const [filename, archiveMeta] of archiveOrgMap) {
+            // Construir la URL estándar para este archivo
+            const fileURL = `https://archive.org/download/${ARCHIVE_COLLECTION}/${encodeURIComponent(filename)}`;
             
             // Verificar si tenemos metadatos sobrescritos por el usuario
-            const overrides = getOverrides();
-            const overrideMeta = overrides[fileURL];
+            const overrideMeta = currentOverrides[fileURL];
             
             let finalMeta;
             if (overrideMeta) {
-                // Usar metadatos sobrescritos por el usuario (tienen prioridad máxima)
+                // Usar metadatos sobrescritos por el usuario
                 finalMeta = {
                     title: overrideMeta.title,
                     artist: overrideMeta.artist,
                     image: overrideMeta.image || null
                 };
-            } else if (existingArchiveMap.has(identifier)) {
-                // La canción existía previamente, usar sus metadatos actuales (que podrían haber sido editados por el usuario)
-                const existingSong = existingArchiveMap.get(identifier);
+            } else if (existingArchiveMap.has(filename)) {
+                // La canción existía previamente
+                const existingSong = existingArchiveMap.get(filename);
                 finalMeta = {
                     title: existingSong.title,
                     artist: existingSong.artist,
                     image: existingSong.image || null
                 };
             } else {
-                // Nueva canción, usar metadatos de archive.org
+                // Nueva canción
                 finalMeta = {
                     title: archiveMeta.title,
                     artist: archiveMeta.artist,
-                    image: null // Por ahora no obtenemos portadas automáticamente
+                    image: null
                 };
             }
             
@@ -597,9 +585,9 @@ async function discoverArchiveFiles() {
             });
         }
         
-        // La nueva playlist es: archivos locales (en su orden original) + canciones de archive.org sincronizadas
+        // La nueva playlist
         playlist = [...localFiles, ...newArchiveSongs];
-        originalPlaylist = [...playlist]; // Actualizar copia original para modo shuffle
+        originalPlaylist = [...playlist]; 
         
         // Actualizar UI
         renderPlaylist();
@@ -610,18 +598,16 @@ async function discoverArchiveFiles() {
             if (song.file.includes('archive.org/download/')) {
                 try {
                     const urlObj = new URL(song.file);
-                    const pathname = urlObj.pathname;
-                    const parts = pathname.split('/').filter(Boolean);
-                    if (parts.length >= 2) {
-                        const filename = parts[1];
-                        const identifier = decodeURIComponent(filename.replace(/\.mp3$/i, ''));
-                        existingArchiveIdentifiers.add(identifier);
+                    const parts = urlObj.pathname.split('/').filter(Boolean);
+                    if (parts.length >= 3) {
+                        const filename = decodeURIComponent(parts[parts.length - 1]);
+                        existingArchiveIdentifiers.add(filename);
                     }
                 } catch (e) {}
             }
         }
         
-        const archiveOrgIdentifiers = new Set(validItems.map(item => item.identifier));
+        const archiveOrgIdentifiers = new Set(validItems.map(item => item.name));
         const added = [...archiveOrgIdentifiers].filter(id => !existingArchiveIdentifiers.has(id));
         const removed = [...existingArchiveIdentifiers].filter(id => !archiveOrgIdentifiers.has(id));
         
