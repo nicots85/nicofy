@@ -185,73 +185,110 @@ async function loadPlaylist() {
     try {
         console.log('Iniciando carga de playlist...');
         
-        // 首先尝试从archive.org API加载
         const ARCHIVE_COLLECTION = 'nicofy';
+        let items = [];
         
-        console.log('Consultando archive.org API...');
-        
-        // 调用archive.org的API获取所有项目
-        const archiveResponse = await fetch(`https://archive.org/advancedsearch.php?q=collection:${ARCHIVE_COLLECTION}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&rows=100&page=1&output=json`);
-        
-        console.log('Archive.org response status:', archiveResponse.status);
-        
-        if (archiveResponse.ok) {
-            const archiveData = await archiveResponse.json();
-            console.log('Archive.org data:', archiveData);
-            
-            const items = archiveData.response.docs || [];
-            console.log('Items encontrados:', items.length);
-            
-            // 过滤有效的项目
-            const validItems = items.filter(item => item.identifier);
-            console.log('Items válidos:', validItems.length);
-            
-            // 为每个项目生成MP3 URL
-            const rawSongs = validItems.map(item => {
-                const identifier = item.identifier;
-                const mp3Url = `https://archive.org/download/${ARCHIVE_COLLECTION}/${encodeURIComponent(identifier)}.mp3`;
+        // Primero intentar con JSONP (evita CORS)
+        try {
+            console.log('Intentando con JSONP...');
+            const jsonpResult = await new Promise((resolve, reject) => {
+                const callbackName = 'archiveCallback_' + Date.now();
+                window[callbackName] = (data) => {
+                    resolve(data);
+                    delete window[callbackName];
+                };
                 
-                return {
-                    file: mp3Url,
-                    title: item.title || identifier,
-                    artist: item.creator || 'DJ Nico',
-                    image: null
-                };
+                const script = document.createElement('script');
+                script.src = `https://archive.org/advancedsearch.php?q=collection:${ARCHIVE_COLLECTION}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&rows=100&page=1&output=json&callback=${callbackName}`;
+                script.onerror = () => reject(new Error('JSONP failed'));
+                document.head.appendChild(script);
+                
+                // Timeout after 10 seconds
+                setTimeout(() => {
+                    delete window[callbackName];
+                    reject(new Error('JSONP timeout'));
+                }, 10000);
             });
             
-            console.log('Songs generadas:', rawSongs.length);
+            if (jsonpResult && jsonpResult.response && jsonpResult.response.docs) {
+                items = jsonpResult.response.docs;
+                console.log('JSONP exitoso, items:', items.length);
+            }
+        } catch (jsonpError) {
+            console.log('JSONP falló:', jsonpError.message, '- intentando con fetch...');
             
-            const overrides = getOverrides();
-            
-            playlist = rawSongs.map(s => {
-                const override = overrides[s.file];
-                return {
-                    ...s,
-                    title: override?.title || s.title || s.file,
-                    artist: override?.artist || s.artist || 'Artista desconocido',
-                    image: override?.image || s.image || null,
-                    src: s.file
-                };
-            });
-        } else {
-            console.log('Archive.org API falló, intentando config.json...');
-            // 如果archive.org API失败，尝试从config.json加载（向后兼容）
-            const response = await fetch(`config.json?t=${Date.now()}`);
-            const data = await response.json();
-            const rawSongs = data.songs || [];
-            const overrides = getOverrides();
-            
-            playlist = rawSongs.map(s => {
-                const override = overrides[s.file];
-                return {
-                    ...s,
-                    title: override?.title || s.title || s.file,
-                    artist: override?.artist || s.artist || 'Artista desconocido',
-                    image: override?.image || s.image || null,
-                    src: (s.file && s.file.startsWith('http')) ? s.file : `music/${s.file}`
-                };
-            });
+            // Fallback: intentar con fetch normal
+            try {
+                const archiveResponse = await fetch(`https://archive.org/advancedsearch.php?q=collection:${ARCHIVE_COLLECTION}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&rows=100&page=1&output=json`);
+                
+                if (archiveResponse.ok) {
+                    const archiveData = await archiveResponse.json();
+                    items = archiveData.response.docs || [];
+                    console.log('Fetch exitoso, items:', items.length);
+                }
+            } catch (fetchError) {
+                console.log('Fetch también falló:', fetchError.message);
+            }
         }
+        
+        // Filtrar items válidos
+        const validItems = items.filter(item => item.identifier);
+        console.log('Items válidos:', validItems.length);
+        
+        // Generar URLs deMP3
+        const rawSongs = validItems.map(item => {
+            const identifier = item.identifier;
+            const mp3Url = `https://archive.org/download/${ARCHIVE_COLLECTION}/${encodeURIComponent(identifier)}.mp3`;
+            
+            return {
+                file: mp3Url,
+                title: item.title || identifier,
+                artist: item.creator || 'DJ Nico',
+                image: null
+            };
+        });
+        
+        console.log('Canciones generadas:', rawSongs.length);
+        
+        const overrides = getOverrides();
+        
+        playlist = rawSongs.map(s => {
+            const override = overrides[s.file];
+            return {
+                ...s,
+                title: override?.title || s.title || s.file,
+                artist: override?.artist || s.artist || 'Artista desconocido',
+                image: override?.image || s.image || null,
+                src: s.file
+            };
+        });
+        
+        console.log('Playlist final:', playlist.length, 'canciones');
+        
+        originalPlaylist = [...playlist];
+        
+        if (playlist.length === 0) {
+            playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">No hay canciones en tu colección de archive.org.<br>Sube archivos WAV o MP3 a tu colección "nicofy" en <a href="https://archive.org" target="_blank" class="text-green-500 hover:underline">archive.org</a></p>';
+        }
+        
+        const saved = localStorage.getItem('nicofy_progress');
+        if (saved && playlist.length > 0) {
+            const { index, time } = JSON.parse(saved);
+            if (index >= 0 && index < playlist.length) {
+                renderPlaylist();
+                hideSplashScreen();
+                playSong(index, time, false);
+                return;
+            }
+        }
+        renderPlaylist();
+        hideSplashScreen();
+    } catch (error) {
+        console.error('Error cargando playlist:', error);
+        hideSplashScreen();
+        playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">Error al cargar: ' + error.message + '<br>Abre la consola (F12) para más detalles</p>';
+    }
+}
         
         console.log('Playlist final:', playlist.length, 'canciones');
         
