@@ -192,8 +192,8 @@ function initAudioContext() {
         gainNode = audioContext.createGain();
         gainNode.gain.value = isMuted ? 0 : document.getElementById('volumeBar').value / 100;
 
-        // FIX: Solo enchufar el motor local avanzado. Si se enchufaba el dinámico por error, el navegador lo silenciaba
-        source = audioContext.createMediaElementSource(audioPlayer);
+        // FIX: Solo enchufar el motor local avanzado nativo. Si se enchufaba el dinámico por error o el proxy, el navegador reventaba.
+        source = audioContext.createMediaElementSource(audioAdvanced);
         
         source.connect(bassNode);
         bassNode.connect(trebleNode);
@@ -484,9 +484,7 @@ function playSong(index, startTime = 0, autoPlay = true) {
     }
     audioPlayer.src = song.src;
     audioPlayer.preload = 'auto'; // Re-habilitar carga automática para que se llene el bufer cuanto antes
-    if (!isRemote) {
-        audioPlayer.load(); 
-    }
+    audioPlayer.load();
     
     // Asignar el tiempo de inicio guardado (set timeout para asegurar que el buffer esté listo en Safari)
     if (startTime > 0) {
