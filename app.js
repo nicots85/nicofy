@@ -68,15 +68,8 @@ let trebleNode = null;
 let gainNode = null;
 let animationId = null;
 
-let audioContext = null;
-let analyser = null;
-let source = null;
-let bassNode = null;
-let trebleNode = null;
-let gainNode = null;
-let animationId = null;
-
 // Configurar canvas
+
 function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -773,7 +766,6 @@ audioPlayer.addEventListener('loadedmetadata', () => durationEl.textContent = fo
 audioPlayer.addEventListener('ended', goNext);
 
 // Pantallas de Carga y Buffer Inteligente
-const splashScreen = document.getElementById('splashScreen');
 const songLoader = document.getElementById('songLoader');
 
 audioPlayer.addEventListener('waiting', () => {
@@ -987,17 +979,16 @@ function stopCasting() {
 }
 
 // Dino follow cursor
-let dino = null;
-let splashScreen = null;
 let dinoMoveListener = null;
 function initDinoFollower() {
-    dino = document.getElementById('dino');
-    splashScreen = document.getElementById('splashScreen');
+    const dino = document.getElementById('dino');
+    const splashScreen = document.getElementById('splashScreen');
     if (!dino || !splashScreen) return;
     
     function moveDino(e) {
-        if (!splashScreen || splashScreen.classList.contains('hidden') || 
-            splashScreen.classList.contains('opacity-0')) {
+        const splash = document.getElementById('splashScreen');
+        if (!splash || splash.classList.contains('hidden') || 
+            splash.classList.contains('opacity-0')) {
             // Remove listener when splash screen is hidden
             if (dinoMoveListener) {
                 document.removeEventListener('mousemove', dinoMoveListener);
@@ -1008,7 +999,7 @@ function initDinoFollower() {
         const x = e.clientX;
         const y = e.clientY;
         // Set position with some offset to avoid cursor covering
-        dino.style.left = (x - 20) + 'px'; // adjust offset as needed
+        dino.style.left = (x - 20) + 'px';
         dino.style.top = (y - 20) + 'px';
     }
     dinoMoveListener = moveDino;
@@ -1023,11 +1014,12 @@ function hideSplashScreen() {
         dinoMoveListener = null;
     }
     
-    // Hide splash screen
-    if (splashScreen) {
-        splashScreen.classList.add('opacity-0');
+    // Hide splash screen - use getElementById to ensure we get the current element
+    const splashElement = document.getElementById('splashScreen');
+    if (splashElement) {
+        splashElement.classList.add('opacity-0');
         setTimeout(() => {
-            splashScreen.classList.add('hidden');
+            splashElement.classList.add('hidden');
         }, 300); // Match the transition duration in CSS
     }
 }
