@@ -232,7 +232,7 @@ async function loadPlaylist() {
             };
         });
         
-        console.log(`✅ Playlist generada: ${rawSongs.length} canciones`);
+console.log(`✅ Playlist generada: ${rawSongs.length} canciones`);
         
         const overrides = getOverrides();
         
