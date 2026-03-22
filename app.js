@@ -1,9 +1,52 @@
 // Nicofy - Reproductor Musical con Visualizador
 // ============================================
 
-// Elementos del DOM
-const audioPlayer = document.getElementById('audioPlayer');
+const audioAdvanced = document.getElementById('audioPlayer');
+const audioDirect = new Audio();
+let _activePlayer = audioAdvanced;
 
+// Simulamos a audioPlayer para que desvíe el tráfico al motor correcto
+const audioPlayer = new Proxy({}, {
+    get(target, prop) {
+        if (prop === 'addEventListener') {
+            return (type, listener, options) => {
+                audioAdvanced.addEventListener(type, listener, options);
+                audioDirect.addEventListener(type, listener, options);
+            };
+        }
+        if (prop === 'removeEventListener') {
+            return (type, listener, options) => {
+                audioAdvanced.removeEventListener(type, listener, options);
+                audioDirect.removeEventListener(type, listener, options);
+            };
+        }
+        if (prop === 'switchEngine') {
+            return (isRemote) => {
+                audioAdvanced.pause();
+                audioDirect.pause();
+                _activePlayer = isRemote ? audioDirect : audioAdvanced;
+            };
+        }
+        if (prop === 'isActiveRemote') {
+            return () => _activePlayer === audioDirect;
+        }
+        const val = _activePlayer[prop];
+        if (typeof val === 'function') {
+            return val.bind(_activePlayer);
+        }
+        return val;
+    },
+    set(target, prop, value) {
+        if (prop === 'volume' || prop === 'muted') {
+            // Sincronizar parámetros globales en ambos
+            audioAdvanced[prop] = value;
+            audioDirect[prop] = value;
+            return true;
+        }
+        _activePlayer[prop] = value;
+        return true;
+    }
+});
 const playBtn = document.getElementById('playBtn');
 const playIcon = document.getElementById('playIcon');
 const pauseIcon = document.getElementById('pauseIcon');
@@ -156,7 +199,19 @@ function drawVisualizer() {
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
     
-    analyser.getByteFrequencyData(dataArray);
+    if (audioPlayer.isActiveRemote()) {
+        if (isPlaying) {
+            for (let i = 0; i < bufferLength; i++) {
+                const noise = Math.random() * 60;
+                const wave = Math.sin(Date.now() / 200 + i * 0.1) * 40;
+                dataArray[i] = Math.max(0, (noise + wave + 50) * audioPlayer.volume);
+            }
+        } else {
+            dataArray.fill(0);
+        }
+    } else {
+        analyser.getByteFrequencyData(dataArray);
+    }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -385,11 +440,20 @@ function playSong(index, startTime = 0, autoPlay = true) {
         });
     }
 
-    audioPlayer.pause();
+    const isRemote = song.src.startsWith('http');
+    audioPlayer.switchEngine(isRemote);
     
     // Reactivar panel ecualizador a los usuarios sin oscurecerlo
     const eqPanel = document.getElementById('eqPanel');
-    if (eqPanel) eqPanel.classList.remove('opacity-30', 'pointer-events-none');
+    if (eqPanel) {
+        if (isRemote) {
+            eqPanel.classList.add('opacity-30', 'pointer-events-none');
+            eqPanel.setAttribute('title', 'Tus metadatos están en la nube. El módulo EQ está deshabilitado.');
+        } else {
+            eqPanel.classList.remove('opacity-30', 'pointer-events-none');
+            eqPanel.removeAttribute('title');
+        }
+    }
     
     // Mostrar visual de cargando mientras hacemos el buffering
     const songLoader = document.getElementById('songLoader');
@@ -398,10 +462,14 @@ function playSong(index, startTime = 0, autoPlay = true) {
 
     // Audio Setup
     audioPlayer.src = '';
-    audioPlayer.crossOrigin = "anonymous"; 
+    if (!isRemote) {
+        audioPlayer.crossOrigin = "anonymous"; 
+    }
     audioPlayer.src = song.src;
     audioPlayer.preload = 'auto'; // Re-habilitar carga automática para que se llene el bufer cuanto antes
-    audioPlayer.load(); 
+    if (!isRemote) {
+        audioPlayer.load(); 
+    }
     
     // Asignar el tiempo de inicio guardado (set timeout para asegurar que el buffer esté listo en Safari)
     if (startTime > 0) {
