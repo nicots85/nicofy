@@ -183,18 +183,28 @@ function drawVisualizer() {
 // Cargar configuración de canciones -直接从archive.org获取
 async function loadPlaylist() {
     try {
+        console.log('Iniciando carga de playlist...');
+        
         // 首先尝试从archive.org API加载
         const ARCHIVE_COLLECTION = 'nicofy';
+        
+        console.log('Consultando archive.org API...');
         
         // 调用archive.org的API获取所有项目
         const archiveResponse = await fetch(`https://archive.org/advancedsearch.php?q=collection:${ARCHIVE_COLLECTION}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&rows=100&page=1&output=json`);
         
+        console.log('Archive.org response status:', archiveResponse.status);
+        
         if (archiveResponse.ok) {
             const archiveData = await archiveResponse.json();
+            console.log('Archive.org data:', archiveData);
+            
             const items = archiveData.response.docs || [];
+            console.log('Items encontrados:', items.length);
             
             // 过滤有效的项目
             const validItems = items.filter(item => item.identifier);
+            console.log('Items válidos:', validItems.length);
             
             // 为每个项目生成MP3 URL
             const rawSongs = validItems.map(item => {
@@ -209,6 +219,8 @@ async function loadPlaylist() {
                 };
             });
             
+            console.log('Songs generadas:', rawSongs.length);
+            
             const overrides = getOverrides();
             
             playlist = rawSongs.map(s => {
@@ -222,6 +234,7 @@ async function loadPlaylist() {
                 };
             });
         } else {
+            console.log('Archive.org API falló, intentando config.json...');
             // 如果archive.org API失败，尝试从config.json加载（向后兼容）
             const response = await fetch(`config.json?t=${Date.now()}`);
             const data = await response.json();
@@ -240,11 +253,13 @@ async function loadPlaylist() {
             });
         }
         
+        console.log('Playlist final:', playlist.length, 'canciones');
+        
         originalPlaylist = [...playlist];
         
         // 如果没有歌曲，显示消息
         if (playlist.length === 0) {
-            playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">No hay canciones en tu colección de archive.org. Sube archivos WAV o MP3 a tu colección "nicofy" y luego actualiza esta página.</p>';
+            playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">No hay canciones en tu colección de archive.org.<br>Sube archivos WAV o MP3 a tu colección "nicofy" en <a href="https://archive.org" target="_blank" class="text-green-500 hover:underline">archive.org</a></p>';
         }
         
         // Restore progress or just render
@@ -266,7 +281,7 @@ async function loadPlaylist() {
         hideSplashScreen();
         
         if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-            playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">No se pudo conectar a archive.org. Verifica tu conexión a internet e intenta nuevamente.</p>';
+            playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">No se pudo conectar a archive.org.<br>Verifica tu conexión a internet e intenta nuevamente.</p>';
         } else if (error.name === 'SyntaxError') {
             playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">Error al leer los datos de archive.org.</p>';
         } else {
