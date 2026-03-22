@@ -180,7 +180,7 @@ function drawVisualizer() {
     animationId = requestAnimationFrame(drawVisualizer);
 }
 
-// Cargar configuración de canciones -直接从archive.org获取
+// Cargar configuración de canciones -Solo MP3 de archive.org
 async function loadPlaylist() {
     try {
         const ARCHIVE_COLLECTION = 'nicofy';
@@ -188,7 +188,7 @@ async function loadPlaylist() {
         
         // Intentar con fetch primero
         try {
-            const archiveResponse = await fetch(`https://archive.org/advancedsearch.php?q=collection:${ARCHIVE_COLLECTION}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&rows=100&page=1&output=json`, {
+            const archiveResponse = await fetch(`https://archive.org/advancedsearch.php?q=collection:${ARCHIVE_COLLECTION}+identifier:*.mp3&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&rows=100&page=1&output=json`, {
                 method: 'GET',
                 mode: 'cors',
                 cache: 'no-cache'
@@ -197,23 +197,53 @@ async function loadPlaylist() {
             if (archiveResponse.ok) {
                 const archiveData = await archiveResponse.json();
                 items = archiveData.response.docs || [];
-                console.log('Archive.org APIok, items:', items.length);
+                console.log('Archive.org MP3s encontrados:', items.length);
             }
         } catch (e) {
             console.log('Fetch error:', e.message);
         }
         
-        // Filtrar items válidos
-        const validItems = items.filter(item => item.identifier);
+        // Si no encuentra nada con el filtro, intentar另一种方式
+        if (items.length === 0) {
+            try {
+                // Buscar todos los archivos MP3 directamente en la colección
+                const searchResponse = await fetch(`https://archive.org/advancedsearch.php?q=collection:${ARCHIVE_COLLECTION}&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&rows=100&page=1&output=json`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    cache: 'no-cache'
+                });
+                
+                if (searchResponse.ok) {
+                    const searchData = await searchResponse.json();
+                    const allItems = searchData.response.docs || [];
+                    
+                    // Filtrar solo items que terminen en .mp3
+                    items = allItems.filter(item => 
+                        item.identifier && item.identifier.toLowerCase().endsWith('.mp3')
+                    );
+                    console.log('Filtrado solo MP3:', items.length);
+                }
+            } catch (e2) {
+                console.log('Second fetch error:', e2.message);
+            }
+        }
         
-        // Generar URLs de MP3
+        // Filtrar items válidos - solo los que terminan en .mp3
+        const validItems = items.filter(item => 
+            item.identifier && item.identifier.toLowerCase().endsWith('.mp3')
+        );
+        
+        console.log('Items MP3 válidos:', validItems.length);
+        
+        // Generar URLs de MP3 (ya son URLs directas a MP3)
         const rawSongs = validItems.map(item => {
             const identifier = item.identifier;
-            const mp3Url = `https://archive.org/download/${ARCHIVE_COLLECTION}/${encodeURIComponent(identifier)}.mp3`;
+            // El identificador ya incluye .mp3, usar directamente
+            const mp3Url = `https://archive.org/download/${ARCHIVE_COLLECTION}/${encodeURIComponent(identifier)}`;
             
             return {
                 file: mp3Url,
-                title: item.title || identifier,
+                title: item.title || identifier.replace('.mp3', ''),
                 artist: item.creator || 'DJ Nico',
                 image: null
             };
