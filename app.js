@@ -356,6 +356,9 @@ function renderPlaylist() {
                 <p class="font-bold truncate text-sm ${isActive ? 'text-green-400' : 'text-gray-100'}">${song.title}</p>
                 <p class="text-[10px] uppercase tracking-wider text-gray-500 font-bold truncate">${song.artist}</p>
             </div>
+            <button class="share-btn p-2 rounded-lg hover:bg-gray-600 transition-all text-gray-400 hover:text-white" data-index="${index}" title="Compartir">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
+            </button>
             <button class="edit-btn p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-gray-600 transition-all text-gray-400 hover:text-white" data-index="${index}">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
             </button>
@@ -376,6 +379,31 @@ function renderPlaylist() {
             openEditModal(parseInt(btn.dataset.index));
         });
     });
+
+    document.querySelectorAll('.share-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            shareSong(parseInt(btn.dataset.index));
+        });
+    });
+}
+
+// Share Logic
+function shareSong(index) {
+    const song = playlist[index];
+    const shareUrl = song.file;
+    const shareText = `🎵 ${song.title} - ${song.artist}`;
+    
+    if (navigator.share) {
+        navigator.share({
+            title: song.title,
+            text: shareText,
+            url: shareUrl
+        }).catch(() => {});
+    } else {
+        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText + '\n' + shareUrl)}`;
+        window.open(whatsappUrl, '_blank');
+    }
 }
 
 // Modal Logic
@@ -930,9 +958,29 @@ document.addEventListener('keydown', e => {
 // Refresh button event listener is already handled by existing declaration
 
 // Iniciar
-loadPlaylist();
+loadGlobalMetadata().then(() => {
+    loadPlaylist();
+});
 // Nota: El botón de refresh ejecuta discoverArchiveFiles() manualmente
 audioPlayer.volume = 0.8;
+
+const exportBtn = document.getElementById('exportBtn');
+if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+        const overrides = getOverrides();
+        if (Object.keys(overrides).length === 0) {
+            alert('No hay metadatos personalizados para exportar todavía.');
+            return;
+        }
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(overrides, null, 2));
+        const a = document.createElement('a');
+        a.href = dataStr;
+        a.download = "metadata.json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    });
+}
 
 // Initialize Google Cast
 window['__onGCastApiAvailable'] = function(isAvailable) {
