@@ -958,9 +958,7 @@ document.addEventListener('keydown', e => {
 // Refresh button event listener is already handled by existing declaration
 
 // Iniciar
-loadGlobalMetadata().then(() => {
-    loadPlaylist();
-});
+loadPlaylist();
 // Nota: El botón de refresh ejecuta discoverArchiveFiles() manualmente
 audioPlayer.volume = 0.8;
 
