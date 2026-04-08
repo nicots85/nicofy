@@ -409,11 +409,11 @@ function renderPlaylist() {
 function shareSong(index) {
     const song = playlist[index];
     const shareUrl = `https://nicofy-bay.vercel.app/?song=${index}`;
-    const shareText = `🎵 ${song.title} - ${song.artist}`;
+    const shareText = `🎵 Nicofy by NicoDiyei\n${song.title} - ${song.artist}`;
 
     if (navigator.share) {
         navigator.share({
-            title: song.title,
+            title: `${song.title} - Nicofy by NicoDiyei`,
             text: shareText,
             url: shareUrl
         }).catch(() => {});
