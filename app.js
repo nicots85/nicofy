@@ -99,7 +99,7 @@ const DISCOVERY_INTERVAL_MS = 30 * 60 * 1000; // 30 minutos
 let isDiscovering = false;
 
 // Google Cast
-let castContext = null;
+let castSession = null;
 let isCasting = false;
 
 // Audio context y visualizador (existing)
@@ -987,44 +987,25 @@ window['__onGCastApiAvailable'] = function(isAvailable) {
 };
 
 function initializeCastApi() {
-    const castOptions = {
-        receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID
-    };
-    
-    const apiConfig = new chrome.cast.ApiConfig(castOptions,
-        sessionListener,
-        receiverListener
-    );
-    
+    const castOptions = new chrome.cast.SessionRequest(chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID);
+    const apiConfig = new chrome.cast.ApiConfig(castOptions, sessionListener, receiverListener);
     chrome.cast.initialize(apiConfig, onInitSuccess, onError);
 }
 
 function sessionListener(e) {
-    console.log('New cast session ID:' + e.sessionId);
-    window.session = e;
-    
-    // Add listener for session events
-    e.addUpdateListener(sessionUpdateListener);
-    e.addMessageListener('urn:x-cast:com.google.cast.media', 
-        function(namespace, message) {
-            // Handle media messages if needed
-        });
-}
-
-function sessionUpdateListener(e) {
-    if (!e) {
-        session = null;
-        isCasting = false;
-        updateCastButton();
-    }
+    castSession = e;
+    console.log('Cast session created:', e.sessionId);
+    e.addUpdateListener(function(isAlive) {
+        if (!isAlive) {
+            castSession = null;
+            isCasting = false;
+            updateCastButton();
+        }
+    });
 }
 
 function receiverListener(e) {
-    if (e === chrome.cast.ReceiverAvailability.AVAILABLE) {
-        console.log('Receiver found');
-    } else {
-        console.log('Receiver list empty');
-    }
+    console.log('Cast availability:', e);
 }
 
 function onInitSuccess() {
@@ -1072,52 +1053,70 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function startCasting() {
-    if (!window.session) {
-        showNotification('No hay sesión de transmisión disponible');
+    if (!castSession) {
+        showNotification('Buscando dispositivos Cast...');
+        chrome.cast.requestSession(function(session) {
+            castSession = session;
+            loadMediaToCast();
+        }, function(error) {
+            showNotification('No hay dispositivos Cast disponibles');
+            console.error('Cast error:', error);
+        });
+    } else {
+        loadMediaToCast();
+    }
+}
+
+function loadMediaToCast() {
+    if (!castSession || !audioPlayer.currentSrc) {
+        showNotification('Error: No hay canción para reproducir');
         return;
     }
-    
-    // Create media info
-    const mediaInfo = new chrome.cast.media.MediaInfo(audioPlayer.currentSrc);
-    mediaInfo.contentType = 'audio/mpeg'; // Assuming MP3, adjust if needed
-    mediaInfo.streamType = chrome.cast.media.StreamType.BUFFERED;
+
+    const mediaInfo = new chrome.cast.media.MediaInfo(audioPlayer.currentSrc, 'audio/mpeg');
     mediaInfo.metadata = new chrome.cast.media.GenericMediaMetadata();
     mediaInfo.metadata.title = songTitle.textContent;
     mediaInfo.metadata.subtitle = artistName.textContent;
-    if (albumImg.src) {
-        mediaInfo.metadata.images = [{ 'url': albumImg.src }];
+    if (albumImg && albumImg.src) {
+        mediaInfo.metadata.images = [new chrome.cast.media.Image(albumImg.src)];
     }
-    
+
     const request = new chrome.cast.media.LoadRequest(mediaInfo);
-    window.session.loadMedia(request, 
-        function() {
+    request.autoplay = true;
+    request.currentTime = audioPlayer.currentTime;
+
+    castSession.loadMedia(request,
+        function(media) {
             isCasting = true;
             updateCastButton();
-            showNotification('Transmitiendo a dispositivo...');
+            showNotification('Reproduciéndose en Cast');
         },
         function(error) {
-            showNotification('Error al transmitir: ' + error.description);
-            console.error('Error casting:', error);
+            showNotification('Error al reproducir: ' + error.description);
+            console.error('Cast load error:', error);
         }
     );
 }
 
 function stopCasting() {
-    if (!window.session) {
+    if (!castSession) {
         isCasting = false;
         updateCastButton();
         return;
     }
-    
-    window.session.stop(
+
+    castSession.stop(
         function() {
+            castSession = null;
             isCasting = false;
             updateCastButton();
             showNotification('Transmisión detenida');
         },
         function(error) {
-            showNotification('Error al detener transmisión: ' + error.description);
-            console.error('Error stopping cast:', error);
+            console.error('Stop error:', error);
+            castSession = null;
+            isCasting = false;
+            updateCastButton();
         }
     );
 }
