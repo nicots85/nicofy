@@ -408,8 +408,7 @@ function renderPlaylist() {
 // Share Logic
 function shareSong(index) {
     const song = playlist[index];
-    const baseUrl = window.location.origin + window.location.pathname.replace(/\/$/, '');
-    const shareUrl = `${baseUrl}/?song=${index}`;
+    const shareUrl = `https://nicofy-bay.vercel.app/?song=${index}`;
     const shareText = `🎵 ${song.title} - ${song.artist}`;
 
     if (navigator.share) {
@@ -979,24 +978,6 @@ document.addEventListener('keydown', e => {
 loadPlaylist();
 // Nota: El botón de refresh ejecuta discoverArchiveFiles() manualmente
 audioPlayer.volume = 0.8;
-
-const exportBtn = document.getElementById('exportBtn');
-if (exportBtn) {
-    exportBtn.addEventListener('click', () => {
-        const overrides = getOverrides();
-        if (Object.keys(overrides).length === 0) {
-            alert('No hay metadatos personalizados para exportar todavía.');
-            return;
-        }
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(overrides, null, 2));
-        const a = document.createElement('a');
-        a.href = dataStr;
-        a.download = "metadata.json";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-    });
-}
 
 // Initialize Google Cast
 window['__onGCastApiAvailable'] = function(isAvailable) {
