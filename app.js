@@ -252,14 +252,24 @@ function drawVisualizer() {
     animationId = requestAnimationFrame(drawVisualizer);
 }
 
+// Parsear parámetros de URL para compartir canciones
+function parseShareUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const songIndex = params.get('song');
+    if (songIndex !== null && !isNaN(songIndex)) {
+        return parseInt(songIndex);
+    }
+    return null;
+}
+
 // Cargar configuración de canciones -Solo MP3 de archive.org
 async function loadPlaylist() {
     try {
         console.log('🔄 Iniciando carga de playlist...');
-        
+
         const ARCHIVE_COLLECTION = 'nicofy';
         let items = [];
-        
+
         // Obtener todos los items del item (no es una colección)
         try {
             console.log('📡 Consultando archive.org metadata...');
@@ -267,18 +277,18 @@ async function loadPlaylist() {
                 `https://archive.org/metadata/${ARCHIVE_COLLECTION}`,
                 { method: 'GET', mode: 'cors', cache: 'no-cache' }
             );
-            
+
             if (archiveResponse.ok) {
                 const archiveData = await archiveResponse.json();
                 const allFiles = archiveData.files || [];
                 console.log(`📁 Total de archivos en el ítem: ${allFiles.length}`);
-                
+
                 // Filtrar solo los que son archivos MP3
-                items = allFiles.filter(item => 
+                items = allFiles.filter(item =>
                     item.name && item.name.toLowerCase().endsWith('.mp3')
                 );
                 console.log(`🎵 Items MP3 encontrados: ${items.length}`);
-                
+
                 // Mostrar los archivos encontrados
                 if (items.length > 0) {
                     console.log('📋 Archivos MP3:', items.map(i => i.name).join(', '));
@@ -289,13 +299,13 @@ async function loadPlaylist() {
         } catch (e) {
             console.log('❌ Error fetching:', e.message);
         }
-        
+
         // Generar URLs de MP3
         const rawSongs = items.map(item => {
             const filename = item.name;
             // URL directa al archivo MP3 en archive.org
             const mp3Url = `https://archive.org/download/${ARCHIVE_COLLECTION}/${encodeURIComponent(filename)}`;
-            
+
             return {
                 file: mp3Url,
                 title: item.title || filename.replace('.mp3', '').replace(/_/g, ' '),
@@ -303,11 +313,11 @@ async function loadPlaylist() {
                 image: getKittenFor(filename)
             };
         });
-        
+
 console.log(`✅ Playlist generada: ${rawSongs.length} canciones`);
-        
+
         const overrides = getOverrides();
-        
+
         playlist = rawSongs.map(s => {
             const override = overrides[s.file];
             return {
@@ -318,15 +328,22 @@ console.log(`✅ Playlist generada: ${rawSongs.length} canciones`);
                 src: s.file
             };
         });
-        
+
         originalPlaylist = [...playlist];
-        
+
         if (playlist.length === 0) {
             playlistEl.innerHTML = '<p class="text-gray-500 text-center py-4">No hay canciones.<br>Sube archivos a tu colección en archive.org</p>';
+            hideSplashScreen();
+        } else {
+            renderPlaylist();
+            // Verificar si hay parámetro compartido para autoplay
+            const sharedSongIndex = parseShareUrl();
+            if (sharedSongIndex !== null && sharedSongIndex >= 0 && sharedSongIndex < playlist.length) {
+                playSong(sharedSongIndex, 0, true);
+            } else {
+                hideSplashScreen();
+            }
         }
-        
-        renderPlaylist();
-        hideSplashScreen();
     } catch (error) {
         console.error('Error cargando playlist:', error);
         hideSplashScreen();
@@ -391,9 +408,10 @@ function renderPlaylist() {
 // Share Logic
 function shareSong(index) {
     const song = playlist[index];
-    const shareUrl = song.file;
+    const baseUrl = window.location.origin + window.location.pathname.replace(/\/$/, '');
+    const shareUrl = `${baseUrl}/?song=${index}`;
     const shareText = `🎵 ${song.title} - ${song.artist}`;
-    
+
     if (navigator.share) {
         navigator.share({
             title: song.title,
